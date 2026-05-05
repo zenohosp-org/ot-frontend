@@ -133,6 +133,7 @@ function CreateBookingModal({ onClose, onSuccess }) {
     const [showRoomDropdown, setShowRoomDropdown] = useState(false);
     const [loadingRooms, setLoadingRooms] = useState(false);
     const [roomError, setRoomError] = useState(null);
+    const [retryingRooms, setRetryingRooms] = useState(false);
     const [dayBookings, setDayBookings] = useState([]);
     const [kits, setKits] = useState([]);
     const [allKits, setAllKits] = useState([]);
@@ -140,6 +141,8 @@ function CreateBookingModal({ onClose, onSuccess }) {
     const [showKitDropdown, setShowKitDropdown] = useState(false);
     const [loadingKits, setLoadingKits] = useState(false);
     const [kitError, setKitError] = useState(null);
+    const [retryingKits, setRetryingKits] = useState(false);
+    const retryTimeoutRef = { rooms: null, kits: null };
     const [selectedKits, setSelectedKits] = useState([]);
     const [formData, setFormData] = useState({
         patientId: '',
@@ -157,43 +160,72 @@ function CreateBookingModal({ onClose, onSuccess }) {
     });
 
     useEffect(() => {
-        const fetchRooms = async () => {
-            setLoadingRooms(true);
+        const fetchRooms = async (isRetry = false) => {
+            if (isRetry) {
+                setRetryingRooms(true);
+            } else {
+                setLoadingRooms(true);
+            }
             setRoomError(null);
             try {
                 const res = await getHmsRooms();
                 const otRooms = (res.data || []).filter(isOtRoom);
                 setAllRooms(otRooms);
                 setRooms(otRooms);
+                setRoomError(null);
+                setRetryingRooms(false);
             } catch (e) {
                 console.error('Error fetching rooms:', e);
-                setRoomError('Failed to load rooms. Please try again.');
                 setAllRooms([]);
                 setRooms([]);
+                setRoomError('Failed to load rooms. Retrying...');
+                setRetryingRooms(true);
+
+                // Retry every 5 seconds
+                retryTimeoutRef.rooms = setTimeout(() => fetchRooms(true), 5000);
             } finally {
-                setLoadingRooms(false);
+                if (!isRetry) {
+                    setLoadingRooms(false);
+                }
             }
         };
 
-        const fetchKits = async () => {
-            setLoadingKits(true);
+        const fetchKits = async (isRetry = false) => {
+            if (isRetry) {
+                setRetryingKits(true);
+            } else {
+                setLoadingKits(true);
+            }
             setKitError(null);
             try {
                 const res = await getInventoryKits();
                 setAllKits(res.data || []);
                 setKits(res.data || []);
+                setKitError(null);
+                setRetryingKits(false);
             } catch (e) {
                 console.error('Error fetching kits:', e);
-                setKitError('Failed to load inventory kits. You can still add custom items.');
                 setAllKits([]);
                 setKits([]);
+                setKitError('Loading inventory kits... You can add custom items.');
+                setRetryingKits(true);
+
+                // Retry every 5 seconds
+                retryTimeoutRef.kits = setTimeout(() => fetchKits(true), 5000);
             } finally {
-                setLoadingKits(false);
+                if (!isRetry) {
+                    setLoadingKits(false);
+                }
             }
         };
 
         fetchRooms();
         fetchKits();
+
+        return () => {
+            if (retryTimeoutRef.rooms) clearTimeout(retryTimeoutRef.rooms);
+            if (retryTimeoutRef.kits) clearTimeout(retryTimeoutRef.kits);
+        };
     }, []);
 
     useEffect(() => {
@@ -551,7 +583,12 @@ function CreateBookingModal({ onClose, onSuccess }) {
                         <div className="relative">
                             <label className="block text-sm font-semibold text-black mb-2">Search Room</label>
                             {roomError && (
-                                <div className="mb-2 text-xs text-red-600 bg-red-50 p-2 rounded">
+                                <div className={`mb-2 text-xs p-2 rounded flex items-center gap-2 ${
+                                    retryingRooms ? 'text-blue-600 bg-blue-50' : 'text-red-600 bg-red-50'
+                                }`}>
+                                    {retryingRooms && (
+                                        <div className="animate-spin h-3 w-3 border-2 border-blue-600 rounded-full border-t-transparent"></div>
+                                    )}
                                     {roomError}
                                 </div>
                             )}
@@ -690,7 +727,12 @@ function CreateBookingModal({ onClose, onSuccess }) {
                                 Inventory Kits {kitError && <span className="text-xs text-gray-600">(Manual entry)</span>}
                             </label>
                             {kitError && (
-                                <div className="mb-2 text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                                <div className={`mb-2 text-xs p-2 rounded flex items-center gap-2 ${
+                                    retryingKits ? 'text-blue-600 bg-blue-50' : 'text-amber-600 bg-amber-50'
+                                }`}>
+                                    {retryingKits && (
+                                        <div className="animate-spin h-3 w-3 border-2 border-blue-600 rounded-full border-t-transparent"></div>
+                                    )}
                                     {kitError}
                                 </div>
                             )}
