@@ -12,7 +12,7 @@ html, body, #root {
 body {
   font-family: system-ui, -apple-system, sans-serif;
   background-color: #ffffff;
-  color: #111827;
+  color: #000000;
 }
 
 @media (prefers-color-scheme: dark) {

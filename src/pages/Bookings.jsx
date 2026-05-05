@@ -26,21 +26,21 @@ export default function Bookings() {
 
     const getStatusColor = (status) => {
         const colors = {
-            REQUESTED: 'bg-gray-100 text-gray-800',
-            CONFIRMED: 'bg-blue-100 text-blue-800',
-            IN_PROGRESS: 'bg-green-100 text-green-800',
-            COMPLETED: 'bg-slate-100 text-slate-800',
-            CANCELLED: 'bg-red-100 text-red-800',
+            REQUESTED: 'bg-gray-200 text-gray-900',
+            CONFIRMED: 'bg-blue-200 text-blue-900 font-semibold',
+            IN_PROGRESS: 'bg-green-300 text-green-900 font-semibold',
+            COMPLETED: 'bg-slate-200 text-slate-900',
+            CANCELLED: 'bg-red-200 text-red-900',
         };
-        return colors[status] || 'bg-gray-100';
+        return colors[status] || 'bg-gray-200 text-gray-900';
     };
 
-    if (loading) return <div className="p-8">Loading...</div>;
+    if (loading) return <div className="p-8 text-black">Loading...</div>;
 
     return (
         <div className="p-8">
             <div className="flex items-center justify-between mb-8">
-                <h1 className="text-3xl font-bold">Bookings</h1>
+                <h1 className="text-3xl font-bold text-black">Bookings</h1>
                 <button
                     onClick={() => setShowModal(true)}
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
@@ -54,23 +54,23 @@ export default function Bookings() {
                 <table className="w-full">
                     <thead>
                         <tr className="border-b bg-gray-50">
-                            <th className="px-6 py-3 text-left font-semibold">Patient</th>
-                            <th className="px-6 py-3 text-left font-semibold">Procedure</th>
-                            <th className="px-6 py-3 text-left font-semibold">Room</th>
-                            <th className="px-6 py-3 text-left font-semibold">Surgeon</th>
-                            <th className="px-6 py-3 text-left font-semibold">Scheduled</th>
-                            <th className="px-6 py-3 text-left font-semibold">Status</th>
-                            <th className="px-6 py-3 text-left font-semibold">Actions</th>
+                            <th className="px-6 py-3 text-left font-semibold text-black">Patient</th>
+                            <th className="px-6 py-3 text-left font-semibold text-black">Procedure</th>
+                            <th className="px-6 py-3 text-left font-semibold text-black">Room</th>
+                            <th className="px-6 py-3 text-left font-semibold text-black">Surgeon</th>
+                            <th className="px-6 py-3 text-left font-semibold text-black">Scheduled</th>
+                            <th className="px-6 py-3 text-left font-semibold text-black">Status</th>
+                            <th className="px-6 py-3 text-left font-semibold text-black">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {bookings.map(booking => (
                             <tr key={booking.id} className="border-b hover:bg-gray-50">
-                                <td className="px-6 py-3 text-sm">{booking.patientName}</td>
-                                <td className="px-6 py-3 text-sm">{booking.procedureName}</td>
-                                <td className="px-6 py-3 text-sm">{booking.roomName}</td>
-                                <td className="px-6 py-3 text-sm">{booking.surgeonName}</td>
-                                <td className="px-6 py-3 text-sm">
+                                <td className="px-6 py-3 text-sm text-black">{booking.patientName}</td>
+                                <td className="px-6 py-3 text-sm text-black">{booking.procedureName}</td>
+                                <td className="px-6 py-3 text-sm text-black">{booking.roomName}</td>
+                                <td className="px-6 py-3 text-sm text-black">{booking.surgeonName}</td>
+                                <td className="px-6 py-3 text-sm text-black">
                                     {new Date(booking.scheduledStart).toLocaleString()}
                                 </td>
                                 <td className="px-6 py-3">
@@ -141,7 +141,7 @@ function CreateBookingModal({ onClose, onSuccess }) {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 <div className="p-6 border-b flex justify-between items-center">
-                    <h2 className="text-xl font-bold">Create Booking</h2>
+                    <h2 className="text-xl font-bold text-black">Create Booking</h2>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
                 </div>
 

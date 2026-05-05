@@ -65,8 +65,8 @@ export default function BookingDetail() {
         }
     };
 
-    if (loading) return <div className="p-8">Loading...</div>;
-    if (!booking) return <div className="p-8">Booking not found</div>;
+    if (loading) return <div className="p-8 text-black">Loading...</div>;
+    if (!booking) return <div className="p-8 text-black">Booking not found</div>;
 
     const canConfirm = booking.status === 'REQUESTED';
     const canStart = booking.status === 'CONFIRMED';
@@ -84,8 +84,8 @@ export default function BookingDetail() {
                     <div className="bg-white rounded-lg shadow p-6 mb-6">
                         <div className="flex justify-between items-start mb-6">
                             <div>
-                                <h1 className="text-3xl font-bold mb-2">{booking.procedureName}</h1>
-                                <p className="text-gray-600">Room: {booking.roomName} | Surgeon: {booking.surgeonName}</p>
+                                <h1 className="text-3xl font-bold mb-2 text-black">{booking.procedureName}</h1>
+                                <p className="text-black">Room: {booking.roomName} | Surgeon: {booking.surgeonName}</p>
                             </div>
                             <div className={`px-4 py-2 rounded font-semibold ${getStatusColor(booking.status)}`}>
                                 {booking.status}
@@ -94,52 +94,52 @@ export default function BookingDetail() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <p className="text-gray-600 text-sm">Patient</p>
-                                <p className="font-semibold">{booking.patientName}</p>
-                                <p className="text-gray-600 text-sm">MRN: {booking.patientMrn}</p>
+                                <p className="text-black text-sm">Patient</p>
+                                <p className="font-semibold text-black">{booking.patientName}</p>
+                                <p className="text-black text-sm">MRN: {booking.patientMrn}</p>
                             </div>
                             <div>
-                                <p className="text-gray-600 text-sm">Scheduled Start</p>
-                                <p className="font-semibold">{new Date(booking.scheduledStart).toLocaleString()}</p>
+                                <p className="text-black text-sm">Scheduled Start</p>
+                                <p className="font-semibold text-black">{new Date(booking.scheduledStart).toLocaleString()}</p>
                             </div>
                             <div>
-                                <p className="text-gray-600 text-sm">Scheduled End</p>
-                                <p className="font-semibold">{new Date(booking.scheduledEnd).toLocaleString()}</p>
+                                <p className="text-black text-sm">Scheduled End</p>
+                                <p className="font-semibold text-black">{new Date(booking.scheduledEnd).toLocaleString()}</p>
                             </div>
                             {booking.actualStart && (
                                 <div>
-                                    <p className="text-gray-600 text-sm">Actual Start</p>
-                                    <p className="font-semibold">{new Date(booking.actualStart).toLocaleString()}</p>
+                                    <p className="text-black text-sm">Actual Start</p>
+                                    <p className="font-semibold text-black">{new Date(booking.actualStart).toLocaleString()}</p>
                                 </div>
                             )}
                             {booking.actualEnd && (
                                 <div>
-                                    <p className="text-gray-600 text-sm">Actual End</p>
-                                    <p className="font-semibold">{new Date(booking.actualEnd).toLocaleString()}</p>
+                                    <p className="text-black text-sm">Actual End</p>
+                                    <p className="font-semibold text-black">{new Date(booking.actualEnd).toLocaleString()}</p>
                                 </div>
                             )}
                         </div>
 
                         {booking.notes && (
                             <div className="mt-4 p-3 bg-gray-50 rounded">
-                                <p className="text-gray-600 text-sm">Notes</p>
-                                <p>{booking.notes}</p>
+                                <p className="text-black text-sm">Notes</p>
+                                <p className="text-black">{booking.notes}</p>
                             </div>
                         )}
                     </div>
 
                     <div className="bg-white rounded-lg shadow p-6">
-                        <h2 className="text-xl font-bold mb-4">Consumption Items</h2>
+                        <h2 className="text-xl font-bold mb-4 text-black">Consumption Items</h2>
 
                         <div className="space-y-3 mb-6">
                             {consumption.length === 0 ? (
-                                <p className="text-gray-600">No consumption items added</p>
+                                <p className="text-black">No consumption items added</p>
                             ) : (
                                 consumption.map(item => (
                                     <div key={item.id} className="flex justify-between items-center p-3 border rounded hover:bg-gray-50">
                                         <div className="flex-1">
-                                            <p className="font-semibold">{item.itemName}</p>
-                                            <p className="text-gray-600 text-sm">
+                                            <p className="font-semibold text-black">{item.itemName}</p>
+                                            <p className="text-black text-sm">
                                                 {item.itemType} • Qty: {item.quantity} • ₹{item.unitPrice.toFixed(2)} each
                                             </p>
                                         </div>
@@ -176,7 +176,7 @@ export default function BookingDetail() {
 
                 <div>
                     <div className="bg-white rounded-lg shadow p-6 sticky top-8">
-                        <h3 className="text-lg font-bold mb-4">Actions</h3>
+                        <h3 className="text-lg font-bold mb-4 text-black">Actions</h3>
 
                         <div className="space-y-3">
                             {canConfirm && (
@@ -232,13 +232,13 @@ export default function BookingDetail() {
 
 function getStatusColor(status) {
     const colors = {
-        REQUESTED: 'bg-gray-100 text-gray-800',
-        CONFIRMED: 'bg-blue-100 text-blue-800',
-        IN_PROGRESS: 'bg-green-100 text-green-800',
-        COMPLETED: 'bg-slate-100 text-slate-800',
-        CANCELLED: 'bg-red-100 text-red-800',
+        REQUESTED: 'bg-gray-300 text-gray-900 font-semibold',
+        CONFIRMED: 'bg-blue-300 text-blue-900 font-semibold',
+        IN_PROGRESS: 'bg-green-400 text-green-900 font-bold',
+        COMPLETED: 'bg-slate-300 text-slate-900 font-semibold',
+        CANCELLED: 'bg-red-300 text-red-900 font-semibold',
     };
-    return colors[status] || 'bg-gray-100';
+    return colors[status] || 'bg-gray-300 text-gray-900';
 }
 
 function AddConsumptionModal({ bookingId, onClose, onSuccess }) {

@@ -34,11 +34,11 @@ export default function Dashboard() {
         fetchStats();
     }, []);
 
-    if (loading) return <div className="p-8">Loading...</div>;
+    if (loading) return <div className="p-8 text-black">Loading...</div>;
 
     return (
         <div className="p-8">
-            <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
+            <h1 className="text-3xl font-bold mb-8 text-black">Dashboard</h1>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <StatCard
@@ -71,8 +71,8 @@ function StatCard({ icon, label, value }) {
         <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <p className="text-gray-600 text-sm">{label}</p>
-                    <p className="text-3xl font-bold mt-2">{value}</p>
+                    <p className="text-black text-sm">{label}</p>
+                    <p className="text-3xl font-bold mt-2 text-black">{value}</p>
                 </div>
                 <div className="text-4xl">{icon}</div>
             </div>

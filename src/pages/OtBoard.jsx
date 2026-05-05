@@ -23,7 +23,7 @@ export default function OtBoard() {
         return () => clearInterval(interval);
     }, []);
 
-    if (loading) return <div className="p-8">Loading...</div>;
+    if (loading) return <div className="p-8 text-black">Loading...</div>;
 
     const rooms = [...new Set(bookings.map(b => b.roomId))].sort();
     const timeSlots = generateTimeSlots();
@@ -41,15 +41,15 @@ export default function OtBoard() {
 
     return (
         <div className="p-8">
-            <h1 className="text-3xl font-bold mb-8">OT Board - Today's Schedule</h1>
+            <h1 className="text-3xl font-bold mb-8 text-black">OT Board - Today's Schedule</h1>
 
             <div className="overflow-x-auto bg-white rounded-lg shadow">
                 <table className="w-full">
                     <thead>
                         <tr className="border-b bg-gray-50">
-                            <th className="px-4 py-3 text-left font-semibold w-32">Time</th>
+                            <th className="px-4 py-3 text-left font-semibold w-32 text-black">Time</th>
                             {rooms.map(roomId => (
-                                <th key={roomId} className="px-4 py-3 text-left font-semibold border-l">
+                                <th key={roomId} className="px-4 py-3 text-left font-semibold border-l text-black">
                                     Room {roomId}
                                 </th>
                             ))}
@@ -58,7 +58,7 @@ export default function OtBoard() {
                     <tbody>
                         {timeSlots.map((slot, i) => (
                             <tr key={i} className="border-b hover:bg-gray-50">
-                                <td className="px-4 py-2 font-medium text-sm bg-gray-50">{slot}</td>
+                                <td className="px-4 py-2 font-medium text-sm bg-gray-50 text-black">{slot}</td>
                                 {rooms.map(roomId => {
                                     const booking = bookings.find(
                                         b => b.roomId === roomId &&
@@ -67,7 +67,7 @@ export default function OtBoard() {
                                     return (
                                         <td key={`${roomId}-${i}`} className="px-4 py-2 border-l">
                                             {booking && (
-                                                <div className={`p-2 rounded text-sm ${getStatusColor(booking.status)}`}>
+                                                <div className={`p-2 rounded text-sm text-black ${getStatusColor(booking.status)}`}>
                                                     <div className="font-semibold">{booking.procedureName}</div>
                                                     <div className="text-xs">{booking.surgeonName}</div>
                                                 </div>
