@@ -46,6 +46,14 @@ export default function Cases() {
         return colors[status] || 'bg-gray-200 text-gray-900';
     };
 
+    const formatDate = (dt) => new Date(dt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    const formatTime = (dt) => new Date(dt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const getDuration = (start, end) => {
+        const mins = Math.round((new Date(end) - new Date(start)) / 60000);
+        return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+    };
+    const isToday = (dt) => new Date(dt).toDateString() === new Date().toDateString();
+
     if (loading) return <div className="p-8 text-black">Loading...</div>;
 
     return (
@@ -69,27 +77,49 @@ export default function Cases() {
                             <th className="px-6 py-3 text-left font-semibold text-black">Procedure</th>
                             <th className="px-6 py-3 text-left font-semibold text-black">Room</th>
                             <th className="px-6 py-3 text-left font-semibold text-black">Surgeon</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Scheduled</th>
+                            <th className="px-6 py-3 text-left font-semibold text-black">Schedule</th>
                             <th className="px-6 py-3 text-left font-semibold text-black">Status</th>
                             <th className="px-6 py-3 text-left font-semibold text-black">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
+                        {bookings.length === 0 && (
+                            <tr>
+                                <td colSpan={7} className="px-6 py-10 text-center text-gray-500">No cases found</td>
+                            </tr>
+                        )}
                         {bookings.map(booking => (
-                            <tr key={booking.id} className="border-b hover:bg-gray-50">
-                                <td className="px-6 py-3 text-sm text-black">{booking.patientName}</td>
-                                <td className="px-6 py-3 text-sm text-black">{booking.procedureName}</td>
-                                <td className="px-6 py-3 text-sm text-black">{booking.roomName}</td>
-                                <td className="px-6 py-3 text-sm text-black">{booking.surgeonName}</td>
-                                <td className="px-6 py-3 text-sm text-black">
-                                    {new Date(booking.scheduledStart).toLocaleString()}
+                            <tr key={booking.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/cases/${booking.id}`)}>
+                                <td className="px-6 py-4">
+                                    <p className="text-sm font-semibold text-black">{booking.patientName}</p>
+                                    {booking.patientMrn && <p className="text-xs text-gray-500 mt-0.5">MRN: {booking.patientMrn}</p>}
                                 </td>
-                                <td className="px-6 py-3">
+                                <td className="px-6 py-4">
+                                    <p className="text-sm text-black">{booking.procedureName}</p>
+                                    {booking.procedureCharge && (
+                                        <p className="text-xs text-gray-500 mt-0.5">₹{Number(booking.procedureCharge).toLocaleString('en-IN')}</p>
+                                    )}
+                                </td>
+                                <td className="px-6 py-4 text-sm text-black">{booking.roomName}</td>
+                                <td className="px-6 py-4 text-sm text-black">{booking.surgeonName}</td>
+                                <td className="px-6 py-4">
+                                    <div className="flex items-center gap-1">
+                                        <p className="text-sm text-black">{formatDate(booking.scheduledStart)}</p>
+                                        {isToday(booking.scheduledStart) && (
+                                            <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">Today</span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                        {formatTime(booking.scheduledStart)} – {formatTime(booking.scheduledEnd)}
+                                        <span className="ml-1 text-gray-400">({getDuration(booking.scheduledStart, booking.scheduledEnd)})</span>
+                                    </p>
+                                </td>
+                                <td className="px-6 py-4">
                                     <span className={`px-3 py-1 rounded text-xs font-semibold ${getStatusColor(booking.status)}`}>
-                                        {booking.status}
+                                        {booking.status.replace('_', ' ')}
                                     </span>
                                 </td>
-                                <td className="px-6 py-3">
+                                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                                     <button
                                         onClick={() => navigate(`/cases/${booking.id}`)}
                                         className="text-blue-600 hover:text-blue-800 text-sm font-medium"
