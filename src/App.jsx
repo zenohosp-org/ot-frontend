@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import Login from './pages/Login';
 import SsoCallback from './pages/SsoCallback';
 import Dashboard from './pages/Dashboard';
+import Rooms from './pages/Rooms';
 import OtBoard from './pages/OtBoard';
 import Bookings from './pages/Bookings';
 import BookingDetail from './pages/BookingDetail';
@@ -24,8 +25,9 @@ function App() {
                             </ProtectedRoute>
                         }
                     >
-                        <Route path="/" element={<Navigate to="/board" replace />} />
+                        <Route path="/" element={<Navigate to="/dashboard" replace />} />
                         <Route path="/dashboard" element={<Dashboard />} />
+                        <Route path="/rooms" element={<Rooms />} />
                         <Route path="/board" element={<OtBoard />} />
                         <Route path="/bookings" element={<Bookings />} />
                         <Route path="/bookings/:id" element={<BookingDetail />} />

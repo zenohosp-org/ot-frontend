@@ -9,6 +9,7 @@ import {
     cancelBooking,
     addConsumptionItem,
     deleteConsumptionItem,
+    getInventoryKits,
 } from '../api/client';
 import { Trash2 } from 'lucide-react';
 
@@ -244,13 +245,58 @@ function getStatusColor(status) {
 function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [kits, setKits] = useState([]);
+    const [kitSearch, setKitSearch] = useState('');
+    const [showKitDropdown, setShowKitDropdown] = useState(false);
+    const [loadingKits, setLoadingKits] = useState(false);
     const [formData, setFormData] = useState({
         itemName: '',
         itemType: 'CONSUMABLE',
         quantity: 1,
         unitPrice: 0,
+        inventoryItemId: null,
         billable: true,
     });
+
+    useEffect(() => {
+        if (formData.itemType !== 'KIT') {
+            setKits([]);
+            setKitSearch('');
+            setShowKitDropdown(false);
+            setFormData((prev) => ({ ...prev, inventoryItemId: null }));
+            return;
+        }
+
+        const fetchKits = async () => {
+            setLoadingKits(true);
+            try {
+                const res = await getInventoryKits();
+                setKits(res.data || []);
+            } catch (e) {
+                setKits([]);
+            } finally {
+                setLoadingKits(false);
+            }
+        };
+
+        fetchKits();
+    }, [formData.itemType]);
+
+    const filteredKits = kits.filter((k) => {
+        if (!kitSearch) return true;
+        const q = kitSearch.toLowerCase();
+        return k.name?.toLowerCase().includes(q) || k.code?.toLowerCase().includes(q);
+    });
+
+    const handleKitSelect = (kit) => {
+        setFormData((prev) => ({
+            ...prev,
+            itemName: kit?.name || prev.itemName,
+            inventoryItemId: kit?.id || null,
+        }));
+        setKitSearch('');
+        setShowKitDropdown(false);
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -258,6 +304,10 @@ function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
         setError(null);
 
         try {
+            if (formData.itemType === 'KIT' && !formData.inventoryItemId) {
+                setError('Please select a kit');
+                return;
+            }
             await addConsumptionItem(bookingId, {
                 ...formData,
                 quantity: parseInt(formData.quantity),
@@ -286,22 +336,61 @@ function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
                         </div>
                     )}
 
-                    <div>
-                        <label className="block text-sm font-semibold mb-2">Item Name</label>
-                        <input
-                            type="text"
-                            value={formData.itemName}
-                            onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
-                            className="w-full border rounded px-3 py-2"
-                            required
-                        />
-                    </div>
+                    {formData.itemType === 'KIT' ? (
+                        <div className="relative">
+                            <label className="block text-sm font-semibold mb-2">Select Kit</label>
+                            <input
+                                type="text"
+                                placeholder={loadingKits ? 'Loading kits...' : 'Search kit name/code...'}
+                                value={kitSearch}
+                                onChange={(e) => {
+                                    setKitSearch(e.target.value);
+                                    setShowKitDropdown(true);
+                                }}
+                                onFocus={() => setShowKitDropdown(true)}
+                                className="w-full border rounded px-3 py-2"
+                            />
+
+                            {showKitDropdown && filteredKits.length > 0 && (
+                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
+                                    {filteredKits.map((kit) => (
+                                        <button
+                                            key={kit.id}
+                                            type="button"
+                                            onClick={() => handleKitSelect(kit)}
+                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0"
+                                        >
+                                            <p className="font-semibold">{kit.name}</p>
+                                            {kit.code && <p className="text-xs text-gray-600">Code: {kit.code}</p>}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {formData.inventoryItemId && (
+                                <p className="mt-2 text-sm text-gray-700">
+                                    Selected: <span className="font-semibold">{formData.itemName}</span>
+                                </p>
+                            )}
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="block text-sm font-semibold mb-2">Item Name</label>
+                            <input
+                                type="text"
+                                value={formData.itemName}
+                                onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
+                                className="w-full border rounded px-3 py-2"
+                                required
+                            />
+                        </div>
+                    )}
 
                     <div>
                         <label className="block text-sm font-semibold mb-2">Type</label>
                         <select
                             value={formData.itemType}
-                            onChange={(e) => setFormData({ ...formData, itemType: e.target.value })}
+                            onChange={(e) => setFormData({ ...formData, itemType: e.target.value, itemName: '', inventoryItemId: null })}
                             className="w-full border rounded px-3 py-2"
                         >
                             <option>KIT</option>

@@ -1,21 +1,41 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { getBookings, createBooking } from '../api/client';
-import { Plus } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { getBookings, createBooking, getHmsPatients, getHmsRooms, getDirectorySurgeons } from '../api/client';
+import { Plus, Search } from 'lucide-react';
+
+function isOtRoom(room) {
+    const roomNumber = (room?.roomNumber || '').toString().toLowerCase();
+    const roomCode = (room?.roomCode || '').toString().toLowerCase();
+    return roomNumber.includes('ot') || roomCode.includes('ot');
+}
+
+function overlapsWithBuffer(desiredStart, desiredEnd, existingStart, existingEnd, bufferMinutes = 30) {
+    const desiredEndWithBuffer = new Date(desiredEnd.getTime() + bufferMinutes * 60 * 1000);
+    return existingStart < desiredEndWithBuffer && existingEnd > desiredStart;
+}
 
 export default function Bookings() {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const roomIdParam = searchParams.get('roomId');
 
     useEffect(() => {
         fetchBookings();
-    }, []);
+    }, [roomIdParam]);
 
     const fetchBookings = async () => {
         try {
-            const res = await getBookings({});
+            const params = {};
+            if (roomIdParam) {
+                const rid = Number(roomIdParam);
+                if (!Number.isNaN(rid)) {
+                    params.roomId = rid;
+                }
+            }
+            const res = await getBookings(params);
             setBookings(res.data);
         } catch (error) {
             console.error('Error fetching bookings:', error);
@@ -40,7 +60,9 @@ export default function Bookings() {
     return (
         <div className="p-8">
             <div className="flex items-center justify-between mb-8">
-                <h1 className="text-3xl font-bold text-black">Bookings</h1>
+                <h1 className="text-3xl font-bold text-black">
+                    {roomIdParam ? `Bookings - Room ${roomIdParam}` : 'Bookings'}
+                </h1>
                 <button
                     onClick={() => setShowModal(true)}
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
@@ -108,11 +130,26 @@ export default function Bookings() {
 function CreateBookingModal({ onClose, onSuccess }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [patients, setPatients] = useState([]);
+    const [patientSearch, setPatientSearch] = useState('');
+    const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+    const [searchingPatients, setSearchingPatients] = useState(false);
+    const [surgeons, setSurgeons] = useState([]);
+    const [surgeonSearch, setSurgeonSearch] = useState('');
+    const [showSurgeonDropdown, setShowSurgeonDropdown] = useState(false);
+    const [searchingSurgeons, setSearchingSurgeons] = useState(false);
+    const [rooms, setRooms] = useState([]);
+    const [allRooms, setAllRooms] = useState([]);
+    const [roomSearch, setRoomSearch] = useState('');
+    const [showRoomDropdown, setShowRoomDropdown] = useState(false);
+    const [loadingRooms, setLoadingRooms] = useState(false);
+    const [dayBookings, setDayBookings] = useState([]);
     const [formData, setFormData] = useState({
         patientId: '',
         patientName: '',
         patientMrn: '',
         procedureName: '',
+        procedureCharge: '',
         roomId: '',
         roomName: '',
         surgeonId: '',
@@ -122,13 +159,214 @@ function CreateBookingModal({ onClose, onSuccess }) {
         notes: '',
     });
 
+    useEffect(() => {
+        const fetchRooms = async () => {
+            setLoadingRooms(true);
+            try {
+                const res = await getHmsRooms();
+                const otRooms = (res.data || []).filter(isOtRoom);
+                setAllRooms(otRooms);
+                setRooms(otRooms);
+            } catch (e) {
+                console.error('Error fetching rooms:', e);
+                setAllRooms([]);
+                setRooms([]);
+            } finally {
+                setLoadingRooms(false);
+            }
+        };
+
+        fetchRooms();
+    }, []);
+
+    useEffect(() => {
+        const start = formData.scheduledStart ? new Date(formData.scheduledStart) : null;
+        if (!start || Number.isNaN(start.getTime())) {
+            setDayBookings([]);
+            return;
+        }
+
+        const fetchDayBookings = async () => {
+            try {
+                const date = start.toISOString().slice(0, 10);
+                const res = await getBookings({ date });
+                setDayBookings(res.data || []);
+            } catch (e) {
+                setDayBookings([]);
+            }
+        };
+
+        fetchDayBookings();
+    }, [formData.scheduledStart]);
+
+    const getAvailableRooms = () => {
+        const desiredStart = formData.scheduledStart ? new Date(formData.scheduledStart) : null;
+        const desiredEnd = formData.scheduledEnd ? new Date(formData.scheduledEnd) : null;
+
+        if (!desiredStart || !desiredEnd || Number.isNaN(desiredStart.getTime()) || Number.isNaN(desiredEnd.getTime())) {
+            return allRooms;
+        }
+
+        const activeBookings = (dayBookings || []).filter(
+            (b) => !['CANCELLED', 'COMPLETED'].includes(b.status)
+        );
+
+        return allRooms.filter((room) => {
+            const conflicts = activeBookings.some((b) => {
+                if (Number(b.roomId) !== Number(room.id)) return false;
+                const bStart = new Date(b.scheduledStart);
+                const bEnd = new Date(b.scheduledEnd);
+                if (Number.isNaN(bStart.getTime()) || Number.isNaN(bEnd.getTime())) return false;
+                return overlapsWithBuffer(desiredStart, desiredEnd, bStart, bEnd, 30);
+            });
+            return !conflicts;
+        });
+    };
+
+    const updateRoomOptions = (query) => {
+        const available = getAvailableRooms();
+        const q = (query || '').toLowerCase();
+        const filtered = available.filter((room) => {
+            if (!q) return true;
+            return (
+                room.roomNumber?.toLowerCase().includes(q) ||
+                room.roomType?.toLowerCase().includes(q) ||
+                room.roomCode?.toLowerCase().includes(q)
+            );
+        });
+        setRooms(filtered);
+    };
+
+    const searchPatients = async (query) => {
+        if (query.length < 2) {
+            setPatients([]);
+            return;
+        }
+
+        setSearchingPatients(true);
+        try {
+            const res = await getHmsPatients(query);
+            setPatients(res.data || []);
+        } catch (error) {
+            console.error('Error searching patients:', error);
+            setPatients([]);
+        } finally {
+            setSearchingPatients(false);
+        }
+    };
+
+    const searchSurgeons = async (query) => {
+        if (query.length < 2) {
+            setSurgeons([]);
+            return;
+        }
+
+        setSearchingSurgeons(true);
+        try {
+            const res = await getDirectorySurgeons(query);
+            setSurgeons(res.data || []);
+        } catch (error) {
+            console.error('Error searching surgeons:', error);
+            setSurgeons([]);
+        } finally {
+            setSearchingSurgeons(false);
+        }
+    };
+
+    useEffect(() => {
+        updateRoomOptions(roomSearch);
+
+        if (formData.roomId) {
+            const availableIds = new Set(getAvailableRooms().map((r) => Number(r.id)));
+            if (!availableIds.has(Number(formData.roomId))) {
+                setFormData((prev) => ({ ...prev, roomId: '', roomName: '' }));
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.scheduledStart, formData.scheduledEnd, dayBookings, allRooms]);
+
+    const handlePatientSelect = (patient) => {
+        setFormData({
+            ...formData,
+            patientId: patient.id ?? '',
+            patientName: patient.name || patient.firstName + ' ' + patient.lastName || '',
+            patientMrn: patient.mrn || '',
+        });
+        setPatientSearch('');
+        setShowPatientDropdown(false);
+        setPatients([]);
+    };
+
+    const handleSurgeonSelect = (surgeon) => {
+        setFormData({
+            ...formData,
+            surgeonId: surgeon.id || '',
+            surgeonName: surgeon.name || surgeon.firstName + ' ' + surgeon.lastName || '',
+        });
+        setSurgeonSearch('');
+        setShowSurgeonDropdown(false);
+        setSurgeons([]);
+    };
+
+    const handleRoomSelect = (room) => {
+        setFormData({
+            ...formData,
+            roomId: room.id ?? '',
+            roomName: room.roomNumber || '',
+        });
+        setRoomSearch('');
+        setShowRoomDropdown(false);
+        setRooms([]);
+    };
+
+    const handlePatientSearchChange = (e) => {
+        const value = e.target.value;
+        setPatientSearch(value);
+        setShowPatientDropdown(true);
+        searchPatients(value);
+    };
+
+    const handleSurgeonSearchChange = (e) => {
+        const value = e.target.value;
+        setSurgeonSearch(value);
+        setShowSurgeonDropdown(true);
+        searchSurgeons(value);
+    };
+
+    const handleRoomSearchChange = (e) => {
+        const value = e.target.value;
+        setRoomSearch(value);
+        setShowRoomDropdown(true);
+        updateRoomOptions(value);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
 
         try {
-            await createBooking(formData);
+            if (!formData.patientId) {
+                setError('Please select a patient');
+                return;
+            }
+            if (!formData.roomId) {
+                setError('Please select a room');
+                return;
+            }
+            if (!formData.surgeonId) {
+                setError('Please select a surgeon');
+                return;
+            }
+
+            const payload = {
+                ...formData,
+                patientId: Number(formData.patientId),
+                roomId: Number(formData.roomId),
+                procedureCharge: formData.procedureCharge ? Number(formData.procedureCharge) : null,
+            };
+
+            await createBooking(payload);
             onSuccess();
         } catch (error) {
             setError(error.response?.data?.message || 'Failed to create booking');
@@ -153,67 +391,229 @@ function CreateBookingModal({ onClose, onSuccess }) {
                     )}
 
                     <div className="grid grid-cols-2 gap-4">
-                        <input
-                            type="text"
-                            placeholder="Patient Name"
-                            value={formData.patientName}
-                            onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
-                        <input
-                            type="text"
-                            placeholder="Patient MRN"
-                            value={formData.patientMrn}
-                            onChange={(e) => setFormData({ ...formData, patientMrn: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
+                        {/* Patient Search from HMS */}
+                        <div className="col-span-2 relative">
+                            <label className="block text-sm font-semibold text-black mb-2">Search Patient (HMS)</label>
+                            <div className="relative">
+                                <div className="absolute left-3 top-3 text-gray-400">
+                                    <Search size={18} />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Search by name or MRN..."
+                                    value={patientSearch}
+                                    onChange={handlePatientSearchChange}
+                                    onFocus={() => setShowPatientDropdown(true)}
+                                    className="w-full border rounded px-10 py-2 text-black"
+                                />
+                                {searchingPatients && (
+                                    <div className="absolute right-3 top-3">
+                                        <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent"></div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Patient Dropdown Results */}
+                            {showPatientDropdown && patients.length > 0 && (
+                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
+                                    {patients.map((patient) => (
+                                        <button
+                                            key={patient.id}
+                                            type="button"
+                                            onClick={() => handlePatientSelect(patient)}
+                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0 text-black"
+                                        >
+                                            <p className="font-semibold">{patient.name || `${patient.firstName} ${patient.lastName}`}</p>
+                                            <p className="text-xs text-gray-600">MRN: {patient.mrn} | Age: {patient.age}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {showPatientDropdown && patientSearch && patients.length === 0 && !searchingPatients && (
+                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 p-3 text-gray-600 text-sm">
+                                    No patients found
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Display Selected Patient Info */}
+                        {formData.patientId && (
+                            <>
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Patient Name</label>
+                                    <p className="border rounded px-3 py-2 bg-gray-50 text-black">{formData.patientName}</p>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Patient MRN</label>
+                                    <p className="border rounded px-3 py-2 bg-gray-50 text-black">{formData.patientMrn}</p>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Procedure Name */}
                         <input
                             type="text"
                             placeholder="Procedure Name"
                             value={formData.procedureName}
                             onChange={(e) => setFormData({ ...formData, procedureName: e.target.value })}
-                            className="border rounded px-3 py-2"
+                            className="border rounded px-3 py-2 text-black"
                             required
                         />
+
                         <input
-                            type="text"
-                            placeholder="Room Name"
-                            value={formData.roomName}
-                            onChange={(e) => setFormData({ ...formData, roomName: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Procedure Charge (optional)"
+                            value={formData.procedureCharge}
+                            onChange={(e) => setFormData({ ...formData, procedureCharge: e.target.value })}
+                            className="border rounded px-3 py-2 text-black"
                         />
-                        <input
-                            type="text"
-                            placeholder="Surgeon Name"
-                            value={formData.surgeonName}
-                            onChange={(e) => setFormData({ ...formData, surgeonName: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
-                        <input
-                            type="datetime-local"
-                            value={formData.scheduledStart}
-                            onChange={(e) => setFormData({ ...formData, scheduledStart: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
-                        <input
-                            type="datetime-local"
-                            value={formData.scheduledEnd}
-                            onChange={(e) => setFormData({ ...formData, scheduledEnd: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
-                        <textarea
-                            placeholder="Notes"
-                            value={formData.notes}
-                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                            className="border rounded px-3 py-2 col-span-2"
-                            rows="2"
-                        />
+
+                        {/* Room Search from HMS */}
+                        <div className="relative">
+                            <label className="block text-sm font-semibold text-black mb-2">Search Room</label>
+                            <div className="relative">
+                                <div className="absolute left-3 top-3 text-gray-400">
+                                    <Search size={18} />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Search OT room..."
+                                    value={roomSearch}
+                                    onChange={handleRoomSearchChange}
+                                    onFocus={() => {
+                                        setShowRoomDropdown(true);
+                                        updateRoomOptions(roomSearch);
+                                    }}
+                                    className="w-full border rounded px-10 py-2 text-black"
+                                />
+                                {loadingRooms && (
+                                    <div className="absolute right-3 top-3">
+                                        <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent"></div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Room Dropdown Results */}
+                            {showRoomDropdown && rooms.length > 0 && (
+                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
+                                    {rooms.map((room) => (
+                                        <button
+                                            key={room.id}
+                                            type="button"
+                                            onClick={() => handleRoomSelect(room)}
+                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0 text-black"
+                                        >
+                                            <p className="font-semibold">{room.roomNumber}</p>
+                                            <p className="text-xs text-gray-600">Type: {room.roomType}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {showRoomDropdown && rooms.length === 0 && !loadingRooms && (
+                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 p-3 text-gray-600 text-sm">
+                                    No rooms found
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Display Selected Room Info */}
+                        {formData.roomId && (
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Selected Room</label>
+                                <p className="border rounded px-3 py-2 bg-gray-50 text-black">{formData.roomName}</p>
+                            </div>
+                        )}
+
+                        {/* Surgeon Search from Directory */}
+                        <div className="relative">
+                            <label className="block text-sm font-semibold text-black mb-2">Search Surgeon</label>
+                            <div className="relative">
+                                <div className="absolute left-3 top-3 text-gray-400">
+                                    <Search size={18} />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Search by surgeon name..."
+                                    value={surgeonSearch}
+                                    onChange={handleSurgeonSearchChange}
+                                    onFocus={() => setShowSurgeonDropdown(true)}
+                                    className="w-full border rounded px-10 py-2 text-black"
+                                />
+                                {searchingSurgeons && (
+                                    <div className="absolute right-3 top-3">
+                                        <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent"></div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Surgeon Dropdown Results */}
+                            {showSurgeonDropdown && surgeons.length > 0 && (
+                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
+                                    {surgeons.map((surgeon) => (
+                                        <button
+                                            key={surgeon.id}
+                                            type="button"
+                                            onClick={() => handleSurgeonSelect(surgeon)}
+                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0 text-black"
+                                        >
+                                            <p className="font-semibold">{surgeon.name || `${surgeon.firstName} ${surgeon.lastName}`}</p>
+                                            <p className="text-xs text-gray-600">{surgeon.email}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {showSurgeonDropdown && surgeonSearch && surgeons.length === 0 && !searchingSurgeons && (
+                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 p-3 text-gray-600 text-sm">
+                                    No surgeons found
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Display Selected Surgeon Info */}
+                        {formData.surgeonId && (
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">Selected Surgeon</label>
+                                <p className="border rounded px-3 py-2 bg-gray-50 text-black">{formData.surgeonName}</p>
+                            </div>
+                        )}
+
+                        <div>
+                            <label className="block text-sm font-semibold text-black mb-2">Scheduled Start</label>
+                            <input
+                                type="datetime-local"
+                                value={formData.scheduledStart}
+                                onChange={(e) => setFormData({ ...formData, scheduledStart: e.target.value })}
+                                className="w-full border rounded px-3 py-2 text-black"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-black mb-2">Scheduled End</label>
+                            <input
+                                type="datetime-local"
+                                value={formData.scheduledEnd}
+                                onChange={(e) => setFormData({ ...formData, scheduledEnd: e.target.value })}
+                                className="w-full border rounded px-3 py-2 text-black"
+                                required
+                            />
+                        </div>
+
+                        <div className="col-span-2">
+                            <label className="block text-sm font-semibold text-black mb-2">Notes</label>
+                            <textarea
+                                placeholder="Notes"
+                                value={formData.notes}
+                                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                className="w-full border rounded px-3 py-2 text-black"
+                                rows="2"
+                            />
+                        </div>
                     </div>
 
                     <div className="flex gap-4 pt-4">
