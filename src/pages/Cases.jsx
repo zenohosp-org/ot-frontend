@@ -132,12 +132,14 @@ function CreateBookingModal({ onClose, onSuccess }) {
     const [roomSearch, setRoomSearch] = useState('');
     const [showRoomDropdown, setShowRoomDropdown] = useState(false);
     const [loadingRooms, setLoadingRooms] = useState(false);
+    const [roomError, setRoomError] = useState(null);
     const [dayBookings, setDayBookings] = useState([]);
     const [kits, setKits] = useState([]);
     const [allKits, setAllKits] = useState([]);
     const [kitSearch, setKitSearch] = useState('');
     const [showKitDropdown, setShowKitDropdown] = useState(false);
     const [loadingKits, setLoadingKits] = useState(false);
+    const [kitError, setKitError] = useState(null);
     const [selectedKits, setSelectedKits] = useState([]);
     const [formData, setFormData] = useState({
         patientId: '',
@@ -157,6 +159,7 @@ function CreateBookingModal({ onClose, onSuccess }) {
     useEffect(() => {
         const fetchRooms = async () => {
             setLoadingRooms(true);
+            setRoomError(null);
             try {
                 const res = await getHmsRooms();
                 const otRooms = (res.data || []).filter(isOtRoom);
@@ -164,6 +167,7 @@ function CreateBookingModal({ onClose, onSuccess }) {
                 setRooms(otRooms);
             } catch (e) {
                 console.error('Error fetching rooms:', e);
+                setRoomError('Failed to load rooms. Please try again.');
                 setAllRooms([]);
                 setRooms([]);
             } finally {
@@ -173,12 +177,14 @@ function CreateBookingModal({ onClose, onSuccess }) {
 
         const fetchKits = async () => {
             setLoadingKits(true);
+            setKitError(null);
             try {
                 const res = await getInventoryKits();
                 setAllKits(res.data || []);
                 setKits(res.data || []);
             } catch (e) {
                 console.error('Error fetching kits:', e);
+                setKitError('Failed to load inventory kits. You can still add custom items.');
                 setAllKits([]);
                 setKits([]);
             } finally {
@@ -544,18 +550,25 @@ function CreateBookingModal({ onClose, onSuccess }) {
                         {/* Room Search */}
                         <div className="relative">
                             <label className="block text-sm font-semibold text-black mb-2">Search Room</label>
+                            {roomError && (
+                                <div className="mb-2 text-xs text-red-600 bg-red-50 p-2 rounded">
+                                    {roomError}
+                                </div>
+                            )}
                             <div className="relative">
                                 <div className="absolute left-3 top-3 text-gray-400">
                                     <Search size={18} />
                                 </div>
                                 <input
                                     type="text"
-                                    placeholder="Search OT room..."
+                                    placeholder={roomError ? 'Enter room name manually...' : 'Search OT room...'}
                                     value={roomSearch}
                                     onChange={handleRoomSearchChange}
                                     onFocus={() => {
-                                        setShowRoomDropdown(true);
-                                        updateRoomOptions(roomSearch);
+                                        if (!roomError) {
+                                            setShowRoomDropdown(true);
+                                            updateRoomOptions(roomSearch);
+                                        }
                                     }}
                                     className="w-full border rounded px-10 py-2 text-black"
                                 />
@@ -566,7 +579,7 @@ function CreateBookingModal({ onClose, onSuccess }) {
                                 )}
                             </div>
 
-                            {showRoomDropdown && rooms.length > 0 && (
+                            {!roomError && showRoomDropdown && rooms.length > 0 && (
                                 <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
                                     {rooms.map((room) => (
                                         <button
@@ -582,7 +595,7 @@ function CreateBookingModal({ onClose, onSuccess }) {
                                 </div>
                             )}
 
-                            {showRoomDropdown && rooms.length === 0 && !loadingRooms && (
+                            {!roomError && showRoomDropdown && rooms.length === 0 && !loadingRooms && (
                                 <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 p-3 text-gray-600 text-sm">
                                     No rooms found
                                 </div>
@@ -673,17 +686,26 @@ function CreateBookingModal({ onClose, onSuccess }) {
 
                         {/* Inventory Kits */}
                         <div className="col-span-2">
-                            <label className="block text-sm font-semibold text-black mb-2">Inventory Kits</label>
+                            <label className="block text-sm font-semibold text-black mb-2">
+                                Inventory Kits {kitError && <span className="text-xs text-gray-600">(Manual entry)</span>}
+                            </label>
+                            {kitError && (
+                                <div className="mb-2 text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                                    {kitError}
+                                </div>
+                            )}
                             <div className="relative mb-3">
                                 <div className="absolute left-3 top-3 text-gray-400">
                                     <Search size={18} />
                                 </div>
                                 <input
                                     type="text"
-                                    placeholder="Search kit..."
+                                    placeholder={kitError ? 'Enter kit name...' : 'Search kit...'}
                                     value={kitSearch}
                                     onChange={handleKitSearchChange}
-                                    onFocus={() => setShowKitDropdown(true)}
+                                    onFocus={() => {
+                                        if (!kitError) setShowKitDropdown(true);
+                                    }}
                                     className="w-full border rounded px-10 py-2 text-black"
                                 />
                                 {loadingKits && (
@@ -693,7 +715,7 @@ function CreateBookingModal({ onClose, onSuccess }) {
                                 )}
                             </div>
 
-                            {showKitDropdown && kits.length > 0 && (
+                            {!kitError && showKitDropdown && kits.length > 0 && (
                                 <div className="absolute z-10 w-96 bg-white border rounded shadow-lg max-h-48 overflow-y-auto">
                                     {kits.map((kit) => (
                                         <button
@@ -707,6 +729,23 @@ function CreateBookingModal({ onClose, onSuccess }) {
                                         </button>
                                     ))}
                                 </div>
+                            )}
+
+                            {kitError && kitSearch && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const newId = 'manual_' + Date.now();
+                                        handleAddKit({
+                                            id: newId,
+                                            name: kitSearch,
+                                            code: '',
+                                        });
+                                    }}
+                                    className="mt-2 text-sm text-blue-600 hover:text-blue-800 underline"
+                                >
+                                    + Add "{kitSearch}" as custom kit
+                                </button>
                             )}
 
                             {selectedKits.length > 0 && (
