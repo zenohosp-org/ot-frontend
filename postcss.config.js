@@ -1,6 +1,5 @@
 export default {
   plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
+    // Using Tailwind CDN instead - no PostCSS plugin needed
   },
 }
