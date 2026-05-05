@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getBookings, createBooking, addConsumptionItem, getHmsPatients, getHmsRooms, getDirectorySurgeons, getInventoryKits } from '../api/client';
+import { getBookings, createBooking, addConsumptionItem, getHmsPatients, getHmsRooms, getDirectorySurgeons, getInventoryKits, getOtAdmissions } from '../api/client';
 import { Plus, Search, Trash2 } from 'lucide-react';
+
+const MAX_RETRIES = 3;
 
 function isOtRoom(room) {
     const roomNumber = (room?.roomNumber || '').toString().toLowerCase();
@@ -16,12 +18,15 @@ function overlapsWithBuffer(desiredStart, desiredEnd, existingStart, existingEnd
 
 export default function Cases() {
     const [bookings, setBookings] = useState([]);
+    const [otAdmissions, setOtAdmissions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [prefilledPatient, setPrefilledPatient] = useState(null);
     const navigate = useNavigate();
 
     useEffect(() => {
         fetchBookings();
+        fetchOtAdmissions();
     }, []);
 
     const fetchBookings = async () => {
@@ -33,6 +38,26 @@ export default function Cases() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const fetchOtAdmissions = async () => {
+        try {
+            const res = await getOtAdmissions();
+            setOtAdmissions(res.data || []);
+        } catch {
+            setOtAdmissions([]);
+        }
+    };
+
+    const handleAdmitPatient = (admission) => {
+        setPrefilledPatient({
+            patientId: admission.patientId,
+            patientName: admission.patientName,
+            patientMrn: admission.patientMrn,
+            roomId: admission.roomId,
+            roomName: admission.roomNumber,
+        });
+        setShowModal(true);
     };
 
     const getStatusColor = (status) => {
@@ -68,6 +93,38 @@ export default function Cases() {
                     New Booking
                 </button>
             </div>
+
+            {otAdmissions.length > 0 && (
+                <div className="mb-6">
+                    <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Patients in OT Rooms</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {otAdmissions.map((admission) => {
+                            const alreadyBooked = bookings.some(
+                                b => String(b.patientId) === String(admission.patientId) &&
+                                     !['COMPLETED', 'CANCELLED'].includes(b.status)
+                            );
+                            return (
+                                <div key={admission.id} className="bg-white border rounded-lg p-4 flex items-center justify-between shadow-sm">
+                                    <div>
+                                        <p className="font-semibold text-black text-sm">{admission.patientName}</p>
+                                        <p className="text-xs text-gray-500">MRN: {admission.patientMrn}</p>
+                                        <p className="text-xs text-gray-500 mt-0.5">Room: {admission.roomNumber}</p>
+                                    </div>
+                                    {alreadyBooked
+                                        ? <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-semibold">Booked</span>
+                                        : <button
+                                            onClick={() => handleAdmitPatient(admission)}
+                                            className="flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded transition"
+                                          >
+                                            <Plus size={14} /> Book OT
+                                          </button>
+                                    }
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white rounded-lg shadow overflow-x-auto">
                 <table className="w-full">
@@ -135,10 +192,13 @@ export default function Cases() {
 
             {showModal && (
                 <CreateBookingModal
-                    onClose={() => setShowModal(false)}
+                    prefilled={prefilledPatient}
+                    onClose={() => { setShowModal(false); setPrefilledPatient(null); }}
                     onSuccess={() => {
                         setShowModal(false);
+                        setPrefilledPatient(null);
                         fetchBookings();
+                        fetchOtAdmissions();
                     }}
                 />
             )}
@@ -146,7 +206,7 @@ export default function Cases() {
     );
 }
 
-function CreateBookingModal({ onClose, onSuccess }) {
+function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [patients, setPatients] = useState([]);
@@ -172,16 +232,17 @@ function CreateBookingModal({ onClose, onSuccess }) {
     const [loadingKits, setLoadingKits] = useState(false);
     const [kitError, setKitError] = useState(null);
     const [retryingKits, setRetryingKits] = useState(false);
-    const retryTimeoutRef = { rooms: null, kits: null };
+    const retryTimeoutRef = useRef({ rooms: null, kits: null });
+    const retryCountRef = useRef({ rooms: 0, kits: 0 });
     const [selectedKits, setSelectedKits] = useState([]);
     const [formData, setFormData] = useState({
-        patientId: '',
-        patientName: '',
-        patientMrn: '',
+        patientId: prefilled?.patientId ?? '',
+        patientName: prefilled?.patientName ?? '',
+        patientMrn: prefilled?.patientMrn ?? '',
         procedureName: '',
         procedureCharge: '',
-        roomId: '',
-        roomName: '',
+        roomId: prefilled?.roomId ?? '',
+        roomName: prefilled?.roomName ?? '',
         surgeonId: '',
         surgeonName: '',
         scheduledStart: '',
@@ -190,12 +251,8 @@ function CreateBookingModal({ onClose, onSuccess }) {
     });
 
     useEffect(() => {
-        const fetchRooms = async (isRetry = false) => {
-            if (isRetry) {
-                setRetryingRooms(true);
-            } else {
-                setLoadingRooms(true);
-            }
+        const fetchRooms = async (retryCount = 0) => {
+            retryCount === 0 ? setLoadingRooms(true) : setRetryingRooms(true);
             setRoomError(null);
             try {
                 const res = await getHmsRooms();
@@ -208,24 +265,21 @@ function CreateBookingModal({ onClose, onSuccess }) {
                 console.error('Error fetching rooms:', e);
                 setAllRooms([]);
                 setRooms([]);
-                setRoomError('Failed to load rooms. Retrying...');
-                setRetryingRooms(true);
-
-                // Retry every 5 seconds
-                retryTimeoutRef.rooms = setTimeout(() => fetchRooms(true), 5000);
-            } finally {
-                if (!isRetry) {
-                    setLoadingRooms(false);
+                if (retryCount < MAX_RETRIES) {
+                    setRoomError('Failed to load rooms. Retrying...');
+                    setRetryingRooms(true);
+                    retryTimeoutRef.current.rooms = setTimeout(() => fetchRooms(retryCount + 1), 5000);
+                } else {
+                    setRoomError('Could not load rooms. Enter room name manually.');
+                    setRetryingRooms(false);
                 }
+            } finally {
+                if (retryCount === 0) setLoadingRooms(false);
             }
         };
 
-        const fetchKits = async (isRetry = false) => {
-            if (isRetry) {
-                setRetryingKits(true);
-            } else {
-                setLoadingKits(true);
-            }
+        const fetchKits = async (retryCount = 0) => {
+            retryCount === 0 ? setLoadingKits(true) : setRetryingKits(true);
             setKitError(null);
             try {
                 const res = await getInventoryKits();
@@ -237,15 +291,16 @@ function CreateBookingModal({ onClose, onSuccess }) {
                 console.error('Error fetching kits:', e);
                 setAllKits([]);
                 setKits([]);
-                setKitError('Loading inventory kits... You can add custom items.');
-                setRetryingKits(true);
-
-                // Retry every 5 seconds
-                retryTimeoutRef.kits = setTimeout(() => fetchKits(true), 5000);
-            } finally {
-                if (!isRetry) {
-                    setLoadingKits(false);
+                if (retryCount < MAX_RETRIES) {
+                    setKitError('Loading inventory kits... You can add custom items.');
+                    setRetryingKits(true);
+                    retryTimeoutRef.current.kits = setTimeout(() => fetchKits(retryCount + 1), 5000);
+                } else {
+                    setKitError('Inventory unavailable. Add custom items manually.');
+                    setRetryingKits(false);
                 }
+            } finally {
+                if (retryCount === 0) setLoadingKits(false);
             }
         };
 
@@ -253,8 +308,8 @@ function CreateBookingModal({ onClose, onSuccess }) {
         fetchKits();
 
         return () => {
-            if (retryTimeoutRef.rooms) clearTimeout(retryTimeoutRef.rooms);
-            if (retryTimeoutRef.kits) clearTimeout(retryTimeoutRef.kits);
+            clearTimeout(retryTimeoutRef.current.rooms);
+            clearTimeout(retryTimeoutRef.current.kits);
         };
     }, []);
 
