@@ -40,7 +40,7 @@ export default function Schedules() {
 
     useEffect(() => {
         getHmsRooms()
-            .then((res) => setRooms((res.data || []).filter(isOtRoom)))
+            .then((res) => setRooms(Array.isArray(res.data) ? res.data.filter(isOtRoom) : []))
             .catch(() => setRooms([]))
             .finally(() => setLoadingRooms(false));
     }, []);
@@ -49,7 +49,7 @@ export default function Schedules() {
         const fetch = () => {
             const today = new Date().toISOString().split('T')[0];
             getBookings({ date: today })
-                .then((res) => setBookings(res.data || []))
+                .then((res) => setBookings(Array.isArray(res.data) ? res.data : []))
                 .catch(() => setBookings([]))
                 .finally(() => setLoadingBookings(false));
         };
