@@ -27,7 +27,7 @@ api.interceptors.response.use(
     }
 );
 
-export const getMyProfile = () => api.get('/api/auth/user/me');
+export const getMyProfile = () => api.get('/api/user/me');
 export const logout = () => api.post('/api/auth/logout');
 
 export const createBooking = (data) => api.post('/api/ot/bookings', data);
