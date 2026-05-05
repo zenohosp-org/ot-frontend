@@ -34,31 +34,56 @@ export default function Dashboard() {
         fetchStats();
     }, []);
 
-    if (loading) return <div className="p-8 text-black">Loading...</div>;
+    if (loading) return (
+        <div className="p-8 bg-gray-50 min-h-screen flex items-center justify-center">
+            <p className="text-sm text-slate-400 font-medium">Loading...</p>
+        </div>
+    );
 
     return (
-        <div className="p-8">
-            <h1 className="text-3xl font-bold mb-8 text-black">Dashboard</h1>
+        <div className="p-8 bg-gray-50 min-h-screen" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+            {/* Page Header */}
+            <div className="mb-8">
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                    OT Dashboard
+                </h1>
+                <p className="text-sm mt-1 text-slate-500">
+                    Here's your operating theater overview for today.
+                </p>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {/* Stat Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <StatCard
-                    icon={<Calendar className="text-blue-600" />}
+                    icon={<Calendar size={18} />}
+                    iconBg="bg-gray-100"
+                    iconColor="text-gray-700"
                     label="Today's Bookings"
+                    sublabel="Scheduled for today"
                     value={stats.total}
                 />
                 <StatCard
-                    icon={<CheckCircle className="text-green-600" />}
+                    icon={<CheckCircle size={18} />}
+                    iconBg="bg-emerald-50"
+                    iconColor="text-emerald-500"
                     label="Confirmed"
+                    sublabel="Ready to proceed"
                     value={stats.confirmed}
                 />
                 <StatCard
-                    icon={<Clock className="text-orange-600" />}
+                    icon={<Clock size={18} />}
+                    iconBg="bg-amber-50"
+                    iconColor="text-amber-500"
                     label="In Progress"
+                    sublabel="Currently active"
                     value={stats.inProgress}
                 />
                 <StatCard
-                    icon={<AlertCircle className="text-gray-600" />}
+                    icon={<AlertCircle size={18} />}
+                    iconBg="bg-slate-100"
+                    iconColor="text-slate-500"
                     label="Completed"
+                    sublabel="Finished today"
                     value={stats.completed}
                 />
             </div>
@@ -66,16 +91,22 @@ export default function Dashboard() {
     );
 }
 
-function StatCard({ icon, label, value }) {
+function StatCard({ icon, iconBg, iconColor, label, sublabel, value }) {
     return (
-        <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <p className="text-black text-sm">{label}</p>
-                    <p className="text-3xl font-bold mt-2 text-black">{value}</p>
-                </div>
-                <div className="text-4xl">{icon}</div>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition-shadow duration-200">
+            {/* Icon badge */}
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${iconBg} ${iconColor}`}>
+                {icon}
             </div>
+
+            {/* Label */}
+            <p className="text-sm font-bold text-gray-900 leading-snug">{label}</p>
+
+            {/* Sublabel */}
+            <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{sublabel}</p>
+
+            {/* Value */}
+            <p className="text-2xl font-bold text-gray-900 mt-3">{value}</p>
         </div>
     );
 }

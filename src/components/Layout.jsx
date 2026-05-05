@@ -14,48 +14,54 @@ export default function Layout() {
     };
 
     return (
-        <div className="flex h-screen bg-gray-50">
-            <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-                <div className="p-6 border-b border-gray-200">
-                    <h1 className="text-xl font-bold text-black">OT Manager</h1>
-                    <p className="text-sm text-black mt-1">Operating Theater</p>
+        <div className="flex h-screen bg-gray-50" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+            {/* Sidebar */}
+            <aside className="w-60 bg-white border-r border-gray-100 flex flex-col shadow-sm">
+                {/* Logo */}
+                <div className="px-5 py-5 border-b border-gray-100">
+                    <span className="text-lg font-bold tracking-tight text-gray-900">
+                        Zeno<span className="text-gray-900">OT</span>
+                    </span>
                 </div>
 
-                <nav className="flex-1 p-4 space-y-2">
+                {/* Nav */}
+                <nav className="flex-1 px-3 py-4 space-y-1">
                     <NavItem
-                        icon={<BarChart3 size={20} />}
+                        icon={<BarChart3 size={18} />}
                         label="Dashboard"
-                        href="/dashboard"
                         active={isActive('/dashboard')}
                         onClick={() => navigate('/dashboard')}
                     />
                     <NavItem
-                        icon={<Grid3x3 size={20} />}
+                        icon={<Grid3x3 size={18} />}
                         label="Schedules"
-                        href="/schedules"
                         active={isActive('/schedules')}
                         onClick={() => navigate('/schedules')}
                     />
                     <NavItem
-                        icon={<BookOpen size={20} />}
+                        icon={<BookOpen size={18} />}
                         label="Cases"
-                        href="/cases"
                         active={isActive('/cases')}
                         onClick={() => navigate('/cases')}
                     />
                 </nav>
 
-                <div className="p-4 border-t border-gray-200">
+                {/* Sign Out */}
+                <div className="px-3 py-4 border-t border-gray-100">
                     <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-black font-medium hover:bg-red-50 hover:text-red-700 rounded-lg transition"
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-medium text-rose-500 bg-rose-50 hover:bg-rose-100 transition-colors duration-150"
                     >
-                        <LogOut size={20} />
-                        <span>Logout</span>
+                        <LogOut size={16} />
+                        <span>Sign Out</span>
                     </button>
+                    <p className="text-center text-[10px] text-slate-300 mt-3">
+                        © 2026 OT Manager
+                    </p>
                 </div>
             </aside>
 
+            {/* Main Content */}
             <main className="flex-1 overflow-auto">
                 <Outlet />
             </main>
@@ -67,11 +73,10 @@ function NavItem({ icon, label, active, onClick }) {
     return (
         <button
             onClick={onClick}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition font-medium ${
-                active
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-black hover:bg-gray-100'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 ${active
+                    ? 'bg-gray-900 text-white'
+                    : 'text-slate-500 hover:bg-gray-100 hover:text-gray-900'
+                }`}
         >
             {icon}
             <span>{label}</span>
