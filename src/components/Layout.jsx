@@ -32,16 +32,16 @@ export default function Layout() {
                     <NavItem
                         icon={<Grid3x3 size={20} />}
                         label="Schedules"
-                        href="/board"
-                        active={isActive('/board')}
-                        onClick={() => navigate('/board')}
+                        href="/schedules"
+                        active={isActive('/schedules')}
+                        onClick={() => navigate('/schedules')}
                     />
                     <NavItem
                         icon={<BookOpen size={20} />}
                         label="Cases"
-                        href="/bookings"
-                        active={isActive('/bookings')}
-                        onClick={() => navigate('/bookings')}
+                        href="/cases"
+                        active={isActive('/cases')}
+                        onClick={() => navigate('/cases')}
                     />
                 </nav>
 

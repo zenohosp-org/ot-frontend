@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getBookings, createBooking, getHmsPatients, getHmsRooms, getDirectorySurgeons } from '../api/client';
-import { Plus, Search } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { getBookings, createBooking, addConsumptionItem, getHmsPatients, getHmsRooms, getDirectorySurgeons, getInventoryKits } from '../api/client';
+import { Plus, Search, Trash2 } from 'lucide-react';
 
 function isOtRoom(room) {
     const roomNumber = (room?.roomNumber || '').toString().toLowerCase();
@@ -14,28 +14,19 @@ function overlapsWithBuffer(desiredStart, desiredEnd, existingStart, existingEnd
     return existingStart < desiredEndWithBuffer && existingEnd > desiredStart;
 }
 
-export default function Bookings() {
+export default function Cases() {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const roomIdParam = searchParams.get('roomId');
 
     useEffect(() => {
         fetchBookings();
-    }, [roomIdParam]);
+    }, []);
 
     const fetchBookings = async () => {
         try {
-            const params = {};
-            if (roomIdParam) {
-                const rid = Number(roomIdParam);
-                if (!Number.isNaN(rid)) {
-                    params.roomId = rid;
-                }
-            }
-            const res = await getBookings(params);
+            const res = await getBookings({});
             setBookings(res.data);
         } catch (error) {
             console.error('Error fetching bookings:', error);
@@ -60,9 +51,7 @@ export default function Bookings() {
     return (
         <div className="p-8">
             <div className="flex items-center justify-between mb-8">
-                <h1 className="text-3xl font-bold text-black">
-                    {roomIdParam ? `Bookings - Room ${roomIdParam}` : 'Bookings'}
-                </h1>
+                <h1 className="text-3xl font-bold text-black">Cases</h1>
                 <button
                     onClick={() => setShowModal(true)}
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
@@ -102,7 +91,7 @@ export default function Bookings() {
                                 </td>
                                 <td className="px-6 py-3">
                                     <button
-                                        onClick={() => navigate(`/bookings/${booking.id}`)}
+                                        onClick={() => navigate(`/cases/${booking.id}`)}
                                         className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                                     >
                                         View
@@ -144,6 +133,12 @@ function CreateBookingModal({ onClose, onSuccess }) {
     const [showRoomDropdown, setShowRoomDropdown] = useState(false);
     const [loadingRooms, setLoadingRooms] = useState(false);
     const [dayBookings, setDayBookings] = useState([]);
+    const [kits, setKits] = useState([]);
+    const [allKits, setAllKits] = useState([]);
+    const [kitSearch, setKitSearch] = useState('');
+    const [showKitDropdown, setShowKitDropdown] = useState(false);
+    const [loadingKits, setLoadingKits] = useState(false);
+    const [selectedKits, setSelectedKits] = useState([]);
     const [formData, setFormData] = useState({
         patientId: '',
         patientName: '',
@@ -176,7 +171,23 @@ function CreateBookingModal({ onClose, onSuccess }) {
             }
         };
 
+        const fetchKits = async () => {
+            setLoadingKits(true);
+            try {
+                const res = await getInventoryKits();
+                setAllKits(res.data || []);
+                setKits(res.data || []);
+            } catch (e) {
+                console.error('Error fetching kits:', e);
+                setAllKits([]);
+                setKits([]);
+            } finally {
+                setLoadingKits(false);
+            }
+        };
+
         fetchRooms();
+        fetchKits();
     }, []);
 
     useEffect(() => {
@@ -235,6 +246,15 @@ function CreateBookingModal({ onClose, onSuccess }) {
             );
         });
         setRooms(filtered);
+    };
+
+    const updateKitOptions = (query) => {
+        const q = (query || '').toLowerCase();
+        const filtered = allKits.filter((kit) => {
+            if (!q) return true;
+            return kit.name?.toLowerCase().includes(q) || kit.code?.toLowerCase().includes(q);
+        });
+        setKits(filtered);
     };
 
     const searchPatients = async (query) => {
@@ -340,6 +360,45 @@ function CreateBookingModal({ onClose, onSuccess }) {
         updateRoomOptions(value);
     };
 
+    const handleKitSearchChange = (e) => {
+        const value = e.target.value;
+        setKitSearch(value);
+        setShowKitDropdown(true);
+        updateKitOptions(value);
+    };
+
+    const handleAddKit = (kit) => {
+        setSelectedKits([...selectedKits, {
+            id: kit.id,
+            name: kit.name,
+            quantity: 1,
+            unitPrice: kit.price || 0,
+        }]);
+        setKitSearch('');
+        setShowKitDropdown(false);
+        updateKitOptions('');
+    };
+
+    const handleRemoveKit = (kitId) => {
+        setSelectedKits(selectedKits.filter((k) => k.id !== kitId));
+    };
+
+    const handleKitQuantityChange = (kitId, quantity) => {
+        setSelectedKits(
+            selectedKits.map((k) =>
+                k.id === kitId ? { ...k, quantity: Math.max(1, Number(quantity)) } : k
+            )
+        );
+    };
+
+    const handleKitPriceChange = (kitId, price) => {
+        setSelectedKits(
+            selectedKits.map((k) =>
+                k.id === kitId ? { ...k, unitPrice: Math.max(0, Number(price)) } : k
+            )
+        );
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -366,7 +425,20 @@ function CreateBookingModal({ onClose, onSuccess }) {
                 procedureCharge: formData.procedureCharge ? Number(formData.procedureCharge) : null,
             };
 
-            await createBooking(payload);
+            const res = await createBooking(payload);
+            const bookingId = res.data.id;
+
+            for (const kit of selectedKits) {
+                await addConsumptionItem(bookingId, {
+                    itemName: kit.name,
+                    itemType: 'KIT',
+                    quantity: kit.quantity,
+                    unitPrice: kit.unitPrice,
+                    inventoryItemId: kit.id,
+                    billable: true,
+                });
+            }
+
             onSuccess();
         } catch (error) {
             setError(error.response?.data?.message || 'Failed to create booking');
@@ -391,9 +463,9 @@ function CreateBookingModal({ onClose, onSuccess }) {
                     )}
 
                     <div className="grid grid-cols-2 gap-4">
-                        {/* Patient Search from HMS */}
+                        {/* Patient Search */}
                         <div className="col-span-2 relative">
-                            <label className="block text-sm font-semibold text-black mb-2">Search Patient (HMS)</label>
+                            <label className="block text-sm font-semibold text-black mb-2">Search Patient</label>
                             <div className="relative">
                                 <div className="absolute left-3 top-3 text-gray-400">
                                     <Search size={18} />
@@ -413,7 +485,6 @@ function CreateBookingModal({ onClose, onSuccess }) {
                                 )}
                             </div>
 
-                            {/* Patient Dropdown Results */}
                             {showPatientDropdown && patients.length > 0 && (
                                 <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
                                     {patients.map((patient) => (
@@ -437,7 +508,6 @@ function CreateBookingModal({ onClose, onSuccess }) {
                             )}
                         </div>
 
-                        {/* Display Selected Patient Info */}
                         {formData.patientId && (
                             <>
                                 <div>
@@ -451,7 +521,7 @@ function CreateBookingModal({ onClose, onSuccess }) {
                             </>
                         )}
 
-                        {/* Procedure Name */}
+                        {/* Procedure */}
                         <input
                             type="text"
                             placeholder="Procedure Name"
@@ -471,7 +541,7 @@ function CreateBookingModal({ onClose, onSuccess }) {
                             className="border rounded px-3 py-2 text-black"
                         />
 
-                        {/* Room Search from HMS */}
+                        {/* Room Search */}
                         <div className="relative">
                             <label className="block text-sm font-semibold text-black mb-2">Search Room</label>
                             <div className="relative">
@@ -496,7 +566,6 @@ function CreateBookingModal({ onClose, onSuccess }) {
                                 )}
                             </div>
 
-                            {/* Room Dropdown Results */}
                             {showRoomDropdown && rooms.length > 0 && (
                                 <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
                                     {rooms.map((room) => (
@@ -520,7 +589,6 @@ function CreateBookingModal({ onClose, onSuccess }) {
                             )}
                         </div>
 
-                        {/* Display Selected Room Info */}
                         {formData.roomId && (
                             <div>
                                 <label className="block text-xs font-semibold text-gray-600 mb-1">Selected Room</label>
@@ -528,7 +596,7 @@ function CreateBookingModal({ onClose, onSuccess }) {
                             </div>
                         )}
 
-                        {/* Surgeon Search from Directory */}
+                        {/* Surgeon Search */}
                         <div className="relative">
                             <label className="block text-sm font-semibold text-black mb-2">Search Surgeon</label>
                             <div className="relative">
@@ -550,7 +618,6 @@ function CreateBookingModal({ onClose, onSuccess }) {
                                 )}
                             </div>
 
-                            {/* Surgeon Dropdown Results */}
                             {showSurgeonDropdown && surgeons.length > 0 && (
                                 <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
                                     {surgeons.map((surgeon) => (
@@ -574,7 +641,6 @@ function CreateBookingModal({ onClose, onSuccess }) {
                             )}
                         </div>
 
-                        {/* Display Selected Surgeon Info */}
                         {formData.surgeonId && (
                             <div>
                                 <label className="block text-xs font-semibold text-gray-600 mb-1">Selected Surgeon</label>
@@ -582,6 +648,7 @@ function CreateBookingModal({ onClose, onSuccess }) {
                             </div>
                         )}
 
+                        {/* Time slots */}
                         <div>
                             <label className="block text-sm font-semibold text-black mb-2">Scheduled Start</label>
                             <input
@@ -604,6 +671,82 @@ function CreateBookingModal({ onClose, onSuccess }) {
                             />
                         </div>
 
+                        {/* Inventory Kits */}
+                        <div className="col-span-2">
+                            <label className="block text-sm font-semibold text-black mb-2">Inventory Kits</label>
+                            <div className="relative mb-3">
+                                <div className="absolute left-3 top-3 text-gray-400">
+                                    <Search size={18} />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Search kit..."
+                                    value={kitSearch}
+                                    onChange={handleKitSearchChange}
+                                    onFocus={() => setShowKitDropdown(true)}
+                                    className="w-full border rounded px-10 py-2 text-black"
+                                />
+                                {loadingKits && (
+                                    <div className="absolute right-3 top-3">
+                                        <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent"></div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {showKitDropdown && kits.length > 0 && (
+                                <div className="absolute z-10 w-96 bg-white border rounded shadow-lg max-h-48 overflow-y-auto">
+                                    {kits.map((kit) => (
+                                        <button
+                                            key={kit.id}
+                                            type="button"
+                                            onClick={() => handleAddKit(kit)}
+                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0 text-black"
+                                        >
+                                            <p className="font-semibold">{kit.name}</p>
+                                            <p className="text-xs text-gray-600">Code: {kit.code}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {selectedKits.length > 0 && (
+                                <div className="space-y-2 mt-3 bg-gray-50 p-3 rounded">
+                                    {selectedKits.map((kit) => (
+                                        <div key={kit.id} className="flex gap-2 items-center bg-white p-2 rounded border">
+                                            <div className="flex-1">
+                                                <p className="text-sm font-semibold text-black">{kit.name}</p>
+                                            </div>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={kit.quantity}
+                                                onChange={(e) => handleKitQuantityChange(kit.id, e.target.value)}
+                                                className="w-16 border rounded px-2 py-1 text-black text-sm"
+                                            />
+                                            <span className="text-xs text-black">Qty</span>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={kit.unitPrice}
+                                                onChange={(e) => handleKitPriceChange(kit.id, e.target.value)}
+                                                className="w-20 border rounded px-2 py-1 text-black text-sm"
+                                            />
+                                            <span className="text-xs text-black">₹</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveKit(kit.id)}
+                                                className="text-red-600 hover:text-red-800"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Notes */}
                         <div className="col-span-2">
                             <label className="block text-sm font-semibold text-black mb-2">Notes</label>
                             <textarea

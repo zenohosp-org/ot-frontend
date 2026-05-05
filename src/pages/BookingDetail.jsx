@@ -76,8 +76,8 @@ export default function BookingDetail() {
 
     return (
         <div className="p-8">
-            <button onClick={() => navigate('/bookings')} className="text-blue-600 hover:text-blue-800 mb-4">
-                ← Back to Bookings
+            <button onClick={() => navigate('/cases')} className="text-blue-600 hover:text-blue-800 mb-4">
+                ← Back to Cases
             </button>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

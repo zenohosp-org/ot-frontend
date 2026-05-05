@@ -4,9 +4,8 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import Login from './pages/Login';
 import SsoCallback from './pages/SsoCallback';
 import Dashboard from './pages/Dashboard';
-import Rooms from './pages/Rooms';
-import OtBoard from './pages/OtBoard';
-import Bookings from './pages/Bookings';
+import Schedules from './pages/Schedules';
+import Cases from './pages/Cases';
 import BookingDetail from './pages/BookingDetail';
 import Layout from './components/Layout';
 
@@ -27,10 +26,9 @@ function App() {
                     >
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />
                         <Route path="/dashboard" element={<Dashboard />} />
-                        <Route path="/rooms" element={<Rooms />} />
-                        <Route path="/board" element={<OtBoard />} />
-                        <Route path="/bookings" element={<Bookings />} />
-                        <Route path="/bookings/:id" element={<BookingDetail />} />
+                        <Route path="/schedules" element={<Schedules />} />
+                        <Route path="/cases" element={<Cases />} />
+                        <Route path="/cases/:id" element={<BookingDetail />} />
                     </Route>
                 </Routes>
             </AuthProvider>
