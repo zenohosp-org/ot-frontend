@@ -10,7 +10,7 @@ export default function SsoCallback() {
         const completeAuth = async () => {
             const success = await validateSession();
             if (success) {
-                navigate('/board', { replace: true });
+                navigate('/dashboard', { replace: true });
             } else {
                 navigate('/login', { replace: true });
             }

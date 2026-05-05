@@ -6,18 +6,19 @@ export default function Login() {
 
     useEffect(() => {
         if (user) {
-            window.location.href = '/board';
+            window.location.href = '/dashboard';
             return;
         }
 
         if (import.meta.env.VITE_DEV_MOCK_AUTH === 'true') {
-            window.location.href = '/board';
+            window.location.href = '/dashboard';
             return;
         }
     }, [user]);
 
     const handleLogin = () => {
-        window.location.href = '/oauth2/authorization/directory';
+        const backendUrl = import.meta.env.VITE_API_BASE_URL || 'https://api-ot.zenohosp.com';
+        window.location.href = `${backendUrl}/oauth2/authorization/directory`;
     };
 
     return (
