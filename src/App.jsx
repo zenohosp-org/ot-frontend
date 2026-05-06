@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import SsoCallback from './pages/SsoCallback';
 import Dashboard from './pages/Dashboard';
 import Schedules from './pages/Schedules';
+import RoomDetail from './pages/RoomDetail';
 import Cases from './pages/Cases';
 import BookingDetail from './pages/BookingDetail';
 import Layout from './components/Layout';
@@ -27,6 +28,7 @@ function App() {
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/schedules" element={<Schedules />} />
+                        <Route path="/schedules/rooms/:roomId" element={<RoomDetail />} />
                         <Route path="/cases" element={<Cases />} />
                         <Route path="/cases/:id" element={<BookingDetail />} />
                     </Route>
