@@ -76,7 +76,23 @@ export const getOtAdmissions = () => api.get('/api/proxy/hms/ot-admissions');
 export const getHmsPatients = (search) => api.get('/api/proxy/hms/patients', { params: { search } });
 export const getHmsDoctors = (search, specialization) => api.get('/api/proxy/hms/doctors', { params: { search, specialization } });
 export const getDirectorySurgeons = (search) => api.get('/api/proxy/directory/surgeons', { params: { search } });
-export const getInventoryKits = () => api.get('/api/proxy/inventory/kits');
+export const getInventoryKits = async () => {
+    console.log('[DEBUG Frontend] Calling getInventoryKits');
+    console.log('[DEBUG Frontend] API base URL:', API_BASE_URL);
+    console.log('[DEBUG Frontend] Full URL:', API_BASE_URL + '/api/proxy/inventory/kits');
+    try {
+        const response = await api.get('/api/proxy/inventory/kits');
+        console.log('[DEBUG Frontend] Success response:', response);
+        return response;
+    } catch (error) {
+        console.error('[DEBUG Frontend] Error fetching kits:');
+        console.error('[DEBUG Frontend] Error status:', error.response?.status);
+        console.error('[DEBUG Frontend] Error data:', error.response?.data);
+        console.error('[DEBUG Frontend] Error headers:', error.response?.headers);
+        console.error('[DEBUG Frontend] Full error:', error);
+        throw error;
+    }
+};
 export const createInventoryKit = (data) => api.post('/api/proxy/inventory/kits', data);
 export const updateInventoryKit = (id, data) => api.put(`/api/proxy/inventory/kits/${id}`, data);
 export const deleteInventoryKit = (id) => api.delete(`/api/proxy/inventory/kits/${id}`);

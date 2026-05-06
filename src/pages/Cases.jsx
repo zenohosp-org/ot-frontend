@@ -283,14 +283,20 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
         const fetchKits = async (retryCount = 0) => {
             retryCount === 0 ? setLoadingKits(true) : setRetryingKits(true);
             setKitError(null);
+            console.log('[DEBUG Cases] fetchKits called, retryCount:', retryCount);
             try {
+                console.log('[DEBUG Cases] About to call getInventoryKits()');
                 const res = await getInventoryKits();
+                console.log('[DEBUG Cases] Successfully fetched kits:', res);
                 setAllKits(res.data || []);
                 setKits(res.data || []);
                 setKitError(null);
                 setRetryingKits(false);
             } catch (e) {
-                console.error('Error fetching kits:', e);
+                console.error('[DEBUG Cases] Error fetching kits:', e);
+                console.error('[DEBUG Cases] Error response status:', e.response?.status);
+                console.error('[DEBUG Cases] Error response data:', e.response?.data);
+                console.error('[DEBUG Cases] Error message:', e.message);
                 setAllKits([]);
                 setKits([]);
                 if (retryCount < MAX_RETRIES) {
@@ -313,6 +319,40 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
             clearTimeout(retryTimeoutRef.current.rooms);
             clearTimeout(retryTimeoutRef.current.kits);
         };
+    }, []);
+
+    // Debug: Test inventory endpoint directly
+    useEffect(() => {
+        const testInventoryEndpoint = async () => {
+            console.log('\n=== [DEBUG TEST] Starting inventory endpoint diagnosis ===');
+
+            // Test 1: Via proxy (normal path)
+            console.log('[DEBUG TEST] Test 1: Calling via proxy /api/proxy/inventory/kits');
+            try {
+                const axiosResponse = await fetch('https://api-ot.zenohosp.com/api/proxy/inventory/kits', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    credentials: 'include'
+                });
+                console.log('[DEBUG TEST] Status:', axiosResponse.status);
+                console.log('[DEBUG TEST] Headers:', Object.fromEntries(axiosResponse.headers));
+                const data = await axiosResponse.text();
+                console.log('[DEBUG TEST] Response body:', data);
+            } catch (err) {
+                console.error('[DEBUG TEST] Fetch error:', err);
+            }
+
+            // Test 2: Check what's in localStorage/sessionStorage
+            console.log('[DEBUG TEST] Test 2: Checking stored auth tokens');
+            console.log('[DEBUG TEST] localStorage keys:', Object.keys(localStorage));
+            console.log('[DEBUG TEST] sessionStorage keys:', Object.keys(sessionStorage));
+            console.log('[DEBUG TEST] sso_token cookie exists:', document.cookie.includes('sso_token'));
+        };
+
+        testInventoryEndpoint();
     }, []);
 
     useEffect(() => {
