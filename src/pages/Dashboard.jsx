@@ -5,6 +5,7 @@ import { Calendar, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import {
     BarChart,
     Bar,
+    CartesianGrid,
     XAxis,
     YAxis,
     Tooltip,
@@ -49,62 +50,56 @@ export default function Dashboard() {
     }, []);
 
     const chartData = [
-        { status: 'Confirmed', value: stats.confirmed, fill: '#10b981' },
+        { status: 'Confirmed', value: stats.confirmed, fill: '#0f172a' },
         { status: 'In Progress', value: stats.inProgress, fill: '#f59e0b' },
-        { status: 'Completed', value: stats.completed, fill: '#64748b' },
+        { status: 'Completed', value: stats.completed, fill: '#94a3b8' },
     ];
 
     if (loading) {
         return (
-            <div className="p-8 bg-gray-50 min-h-screen flex items-center justify-center">
-                <p className="text-sm text-slate-400 font-medium">Loading...</p>
+            <div className="flex items-center justify-center h-64">
+                <p className="text-sm font-medium text-slate-500">Loading...</p>
             </div>
         );
     }
 
     return (
-        <div className="p-8 bg-gray-50 min-h-screen" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+        <div className="flex flex-col h-full bg-slate-50 gap-6 p-6">
 
             {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                    OT Dashboard
-                </h1>
-                <p className="text-sm mt-1 text-slate-500">
-                    Here's your operating theater overview for today.
-                </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                        OT Dashboard
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-0.5">
+                        Here's your operating theater overview for today.
+                    </p>
+                </div>
             </div>
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <StatCard
-                    icon={<Calendar size={18} />}
-                    iconBg="bg-gray-100"
-                    iconColor="text-gray-700"
+                    icon={<Calendar className="w-8 h-8 mb-2" />}
                     label="Today's Bookings"
                     sublabel="Scheduled for today"
                     value={stats.total}
                 />
                 <StatCard
-                    icon={<CheckCircle size={18} />}
-                    iconBg="bg-emerald-50"
-                    iconColor="text-emerald-500"
+                    icon={<CheckCircle className="w-8 h-8 mb-2" />}
                     label="Confirmed"
                     sublabel="Ready to proceed"
                     value={stats.confirmed}
                 />
                 <StatCard
-                    icon={<Clock size={18} />}
-                    iconBg="bg-amber-50"
-                    iconColor="text-amber-500"
+                    icon={<Clock className="w-8 h-8 mb-2" />}
                     label="In Progress"
                     sublabel="Currently active"
                     value={stats.inProgress}
                 />
                 <StatCard
-                    icon={<AlertCircle size={18} />}
-                    iconBg="bg-slate-100"
-                    iconColor="text-slate-500"
+                    icon={<AlertCircle className="w-8 h-8 mb-2" />}
                     label="Completed"
                     sublabel="Finished today"
                     value={stats.completed}
@@ -112,20 +107,21 @@ export default function Dashboard() {
             </div>
 
             {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 {/* Bar Chart */}
-                <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                    <h3 className="text-sm font-semibold text-slate-900 mb-4">
+                <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+                    <h3 className="text-sm font-bold text-slate-900 mb-4">
                         Booking Status Overview
                     </h3>
 
                     <div style={{ width: '100%', height: 250 }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                                <XAxis dataKey="status" tick={{ fontSize: 12 }} />
-                                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                                <XAxis dataKey="status" tick={{ fontSize: 12, fill: '#94a3b8' }} />
+                                <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
                                 <Tooltip />
+                                <CartesianGrid stroke="rgba(148,163,184,0.1)" />
                                 <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                                     {chartData.map((entry, index) => (
                                         <Cell key={index} fill={entry.fill} />
@@ -137,8 +133,8 @@ export default function Dashboard() {
                 </div>
 
                 {/* Pie Chart */}
-                <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-                    <h3 className="text-sm font-semibold text-slate-900 mb-4">
+                <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+                    <h3 className="text-sm font-bold text-slate-900 mb-4">
                         Distribution
                     </h3>
 
@@ -174,16 +170,13 @@ export default function Dashboard() {
     );
 }
 
-function StatCard({ icon, iconBg, iconColor, label, sublabel, value }) {
+function StatCard({ icon, label, sublabel, value }) {
     return (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:shadow-md transition">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${iconBg} ${iconColor}`}>
-                {icon}
-            </div>
-
-            <p className="text-sm font-semibold text-slate-900">{label}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{sublabel}</p>
-            <p className="text-2xl font-bold text-slate-900 mt-3">{value}</p>
+        <div className="bg-white border border-slate-200 rounded-lg p-6 flex flex-col gap-1 shadow-sm">
+            {icon}
+            <p className="text-base font-bold text-slate-900 mt-1">{label}</p>
+            <p className="text-sm text-slate-500 mt-0.5">{sublabel}</p>
+            <p className="text-4xl font-bold text-slate-900 mt-3">{value}</p>
         </div>
     );
 }

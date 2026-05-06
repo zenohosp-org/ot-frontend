@@ -26,62 +26,66 @@ export default function Bookings() {
 
     const getStatusColor = (status) => {
         const colors = {
-            REQUESTED: 'bg-gray-200 text-gray-900',
-            CONFIRMED: 'bg-blue-200 text-blue-900 font-semibold',
-            IN_PROGRESS: 'bg-green-300 text-green-900 font-semibold',
-            COMPLETED: 'bg-slate-200 text-slate-900',
-            CANCELLED: 'bg-red-200 text-red-900',
+            REQUESTED: 'bg-slate-100 text-slate-700 border-slate-200',
+            CONFIRMED: 'bg-blue-50 text-blue-700 border-blue-200',
+            IN_PROGRESS: 'bg-amber-50 text-amber-700 border-amber-200',
+            COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            CANCELLED: 'bg-rose-50 text-rose-600 border-rose-200',
         };
-        return colors[status] || 'bg-gray-200 text-gray-900';
+        return colors[status] || 'bg-slate-100 text-slate-700 border-slate-200';
     };
 
-    if (loading) return <div className="p-8 text-black">Loading...</div>;
+    if (loading) return (
+        <div className="flex items-center justify-center h-64">
+            <p className="text-sm font-medium text-slate-500">Loading...</p>
+        </div>
+    );
 
     return (
-        <div className="p-8">
-            <div className="flex items-center justify-between mb-8">
-                <h1 className="text-3xl font-bold text-black">Bookings</h1>
+        <div className="flex flex-col h-full bg-slate-50 gap-6 p-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Bookings</h1>
+                </div>
                 <button
                     onClick={() => setShowModal(true)}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
+                    className="bg-slate-900 hover:bg-slate-700 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm"
                 >
                     <Plus size={20} />
                     New Booking
                 </button>
             </div>
 
-            <div className="bg-white rounded-lg shadow overflow-x-auto">
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
                 <table className="w-full">
                     <thead>
-                        <tr className="border-b bg-gray-50">
-                            <th className="px-6 py-3 text-left font-semibold text-black">Patient</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Procedure</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Room</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Surgeon</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Scheduled</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Status</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Actions</th>
+                        <tr className="border-b border-slate-100 bg-slate-50">
+                            <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left">Patient</th>
+                            <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left">Procedure</th>
+                            <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left">Room</th>
+                            <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left">Surgeon</th>
+                            <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left">Scheduled</th>
+                            <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left">Status</th>
+                            <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {bookings.map(booking => (
-                            <tr key={booking.id} className="border-b hover:bg-gray-50">
-                                <td className="px-6 py-3 text-sm text-black">{booking.patientName}</td>
-                                <td className="px-6 py-3 text-sm text-black">{booking.procedureName}</td>
-                                <td className="px-6 py-3 text-sm text-black">{booking.roomName}</td>
-                                <td className="px-6 py-3 text-sm text-black">{booking.surgeonName}</td>
-                                <td className="px-6 py-3 text-sm text-black">
-                                    {new Date(booking.scheduledStart).toLocaleString()}
-                                </td>
-                                <td className="px-6 py-3">
-                                    <span className={`px-3 py-1 rounded text-xs font-semibold ${getStatusColor(booking.status)}`}>
+                            <tr key={booking.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer">
+                                <td className="px-5 py-4"><p className="text-sm font-semibold text-slate-900">{booking.patientName}</p></td>
+                                <td className="px-5 py-4"><p className="text-sm font-semibold text-slate-900">{booking.procedureName}</p></td>
+                                <td className="px-5 py-4"><p className="text-sm font-semibold text-slate-900">{booking.roomName}</p></td>
+                                <td className="px-5 py-4"><p className="text-sm font-semibold text-slate-900">{booking.surgeonName}</p></td>
+                                <td className="px-5 py-4"><p className="text-sm font-semibold text-slate-900">{new Date(booking.scheduledStart).toLocaleString()}</p></td>
+                                <td className="px-5 py-4">
+                                    <span className={`px-2.5 py-1 rounded-md text-xs font-semibold border inline-flex items-center ${getStatusColor(booking.status)}`}>
                                         {booking.status}
                                     </span>
                                 </td>
-                                <td className="px-6 py-3">
+                                <td className="px-5 py-4">
                                     <button
                                         onClick={() => navigate(`/bookings/${booking.id}`)}
-                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                        className="text-sm font-semibold text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
                                     >
                                         View
                                     </button>
@@ -138,96 +142,121 @@ function CreateBookingModal({ onClose, onSuccess }) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                <div className="p-6 border-b flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-black">Create Booking</h2>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+        <div className="fixed inset-0 z-50 w-full min-h-screen flex items-start justify-center overflow-y-auto p-4 pt-10">
+            <div className="absolute inset-0 w-full min-h-screen bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl my-8 overflow-hidden border border-slate-200 relative z-10">
+                <div className="flex items-center justify-between p-6 border-b border-slate-100">
+                    <h2 className="text-lg font-bold text-slate-900">Create Booking</h2>
+                    <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all">✕</button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     {error && (
-                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                        <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-lg text-sm">
                             {error}
                         </div>
                     )}
 
                     <div className="grid grid-cols-2 gap-4">
-                        <input
-                            type="text"
-                            placeholder="Patient Name"
-                            value={formData.patientName}
-                            onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
-                        <input
-                            type="text"
-                            placeholder="Patient MRN"
-                            value={formData.patientMrn}
-                            onChange={(e) => setFormData({ ...formData, patientMrn: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
-                        <input
-                            type="text"
-                            placeholder="Procedure Name"
-                            value={formData.procedureName}
-                            onChange={(e) => setFormData({ ...formData, procedureName: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
-                        <input
-                            type="text"
-                            placeholder="Room Name"
-                            value={formData.roomName}
-                            onChange={(e) => setFormData({ ...formData, roomName: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
-                        <input
-                            type="text"
-                            placeholder="Surgeon Name"
-                            value={formData.surgeonName}
-                            onChange={(e) => setFormData({ ...formData, surgeonName: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
-                        <input
-                            type="datetime-local"
-                            value={formData.scheduledStart}
-                            onChange={(e) => setFormData({ ...formData, scheduledStart: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
-                        <input
-                            type="datetime-local"
-                            value={formData.scheduledEnd}
-                            onChange={(e) => setFormData({ ...formData, scheduledEnd: e.target.value })}
-                            className="border rounded px-3 py-2"
-                            required
-                        />
-                        <textarea
-                            placeholder="Notes"
-                            value={formData.notes}
-                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                            className="border rounded px-3 py-2 col-span-2"
-                            rows="2"
-                        />
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Patient Name</label>
+                            <input
+                                type="text"
+                                placeholder="Patient Name"
+                                value={formData.patientName}
+                                onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Patient MRN</label>
+                            <input
+                                type="text"
+                                placeholder="Patient MRN"
+                                value={formData.patientMrn}
+                                onChange={(e) => setFormData({ ...formData, patientMrn: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Procedure Name</label>
+                            <input
+                                type="text"
+                                placeholder="Procedure Name"
+                                value={formData.procedureName}
+                                onChange={(e) => setFormData({ ...formData, procedureName: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Room Name</label>
+                            <input
+                                type="text"
+                                placeholder="Room Name"
+                                value={formData.roomName}
+                                onChange={(e) => setFormData({ ...formData, roomName: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Surgeon Name</label>
+                            <input
+                                type="text"
+                                placeholder="Surgeon Name"
+                                value={formData.surgeonName}
+                                onChange={(e) => setFormData({ ...formData, surgeonName: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Scheduled Start</label>
+                            <input
+                                type="datetime-local"
+                                value={formData.scheduledStart}
+                                onChange={(e) => setFormData({ ...formData, scheduledStart: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Scheduled End</label>
+                            <input
+                                type="datetime-local"
+                                value={formData.scheduledEnd}
+                                onChange={(e) => setFormData({ ...formData, scheduledEnd: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
+                                required
+                            />
+                        </div>
+                        <div className="col-span-2">
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Notes</label>
+                            <textarea
+                                placeholder="Notes"
+                                value={formData.notes}
+                                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all resize-none"
+                                rows="2"
+                            />
+                        </div>
                     </div>
 
                     <div className="flex gap-4 pt-4">
                         <button
                             type="submit"
                             disabled={loading}
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                            className="flex-1 bg-slate-900 hover:bg-slate-700 text-white font-semibold py-2.5 rounded-lg transition-all text-sm disabled:opacity-50"
                         >
                             {loading ? 'Creating...' : 'Create Booking'}
                         </button>
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 rounded-lg transition"
+                            className="flex-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold py-2.5 rounded-lg transition-all text-sm"
                         >
                             Cancel
                         </button>

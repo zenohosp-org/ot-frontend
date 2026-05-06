@@ -23,11 +23,11 @@ function isTimeInRange(timeSlot, start, end) {
 }
 
 const STATUS_COLORS = {
-    REQUESTED: 'bg-gray-200',
+    REQUESTED: 'bg-slate-200',
     CONFIRMED: 'bg-blue-200',
-    IN_PROGRESS: 'bg-green-200 animate-pulse',
+    IN_PROGRESS: 'bg-amber-200 animate-pulse',
     COMPLETED: 'bg-slate-200',
-    CANCELLED: 'bg-red-200',
+    CANCELLED: 'bg-rose-200',
 };
 
 export default function Schedules() {
@@ -77,10 +77,14 @@ export default function Schedules() {
     const timeSlots = generateTimeSlots();
 
     return (
-        <div className="p-8">
-            <h1 className="text-3xl font-bold mb-6 text-black">Schedules</h1>
+        <div className="flex flex-col h-full bg-slate-50 gap-6 p-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Schedules</h1>
+                </div>
+            </div>
 
-            <div className="flex gap-2 mb-6 border-b border-gray-200">
+            <div className="flex gap-2 border-b border-slate-200">
                 <TabButton label="Room List" active={tab === 'rooms'} onClick={() => setTab('rooms')} />
                 <TabButton label="Timeline" active={tab === 'timeline'} onClick={() => setTab('timeline')} />
             </div>
@@ -109,8 +113,8 @@ function TabButton({ label, active, onClick }) {
             onClick={onClick}
             className={`px-5 py-2 font-medium text-sm border-b-2 transition -mb-px ${
                 active
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-black'
+                    ? 'border-slate-900 text-slate-900'
+                    : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
         >
             {label}
@@ -119,29 +123,33 @@ function TabButton({ label, active, onClick }) {
 }
 
 function RoomList({ rooms, loading, onViewTimeline }) {
-    if (loading) return <div className="text-black">Loading rooms...</div>;
+    if (loading) return (
+        <div className="flex items-center justify-center h-64">
+            <p className="text-sm font-medium text-slate-500">Loading rooms...</p>
+        </div>
+    );
 
     return (
-        <div className="bg-white rounded-lg shadow overflow-x-auto">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
             <table className="w-full">
                 <thead>
-                    <tr className="border-b bg-gray-50">
-                        <th className="px-6 py-3 text-left font-semibold text-black">Room</th>
-                        <th className="px-6 py-3 text-left font-semibold text-black">Type</th>
-                        <th className="px-6 py-3 text-left font-semibold text-black">Status</th>
-                        <th className="px-6 py-3 text-left font-semibold text-black">Actions</th>
+                    <tr className="border-b border-slate-100 bg-slate-50">
+                        <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left">Room</th>
+                        <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left">Type</th>
+                        <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left">Status</th>
+                        <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {rooms.map((room) => (
-                        <tr key={room.id} className="border-b hover:bg-gray-50">
-                            <td className="px-6 py-3 text-sm text-black">{room.roomNumber}</td>
-                            <td className="px-6 py-3 text-sm text-black">{room.roomType}</td>
-                            <td className="px-6 py-3 text-sm text-black">{room.status}</td>
-                            <td className="px-6 py-3 text-sm">
+                        <tr key={room.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer">
+                            <td className="px-5 py-4"><p className="text-sm font-semibold text-slate-900">{room.roomNumber}</p></td>
+                            <td className="px-5 py-4"><p className="text-sm font-semibold text-slate-900">{room.roomType}</p></td>
+                            <td className="px-5 py-4"><p className="text-sm font-semibold text-slate-900">{room.status}</p></td>
+                            <td className="px-5 py-4">
                                 <button
                                     onClick={() => onViewTimeline(room)}
-                                    className="text-blue-600 hover:text-blue-800 font-medium"
+                                    className="text-sm font-semibold text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
                                 >
                                     View Timeline
                                 </button>
@@ -151,36 +159,40 @@ function RoomList({ rooms, loading, onViewTimeline }) {
                 </tbody>
             </table>
             {rooms.length === 0 && (
-                <div className="p-6 text-black">No OT rooms found</div>
+                <div className="px-5 py-10 text-center text-sm font-medium text-slate-500">No OT rooms found</div>
             )}
         </div>
     );
 }
 
 function Timeline({ columns, bookings, loading, selectedRoom, timeSlots, onClearRoom }) {
-    if (loading) return <div className="text-black">Loading timeline...</div>;
+    if (loading) return (
+        <div className="flex items-center justify-center h-64">
+            <p className="text-sm font-medium text-slate-500">Loading timeline...</p>
+        </div>
+    );
 
     return (
         <div>
             {selectedRoom && (
                 <div className="flex items-center gap-4 mb-4">
-                    <span className="text-black font-semibold">Room: {selectedRoom.roomNumber}</span>
+                    <span className="text-sm font-semibold text-slate-900">Room: {selectedRoom.roomNumber}</span>
                     <button
                         onClick={onClearRoom}
-                        className="text-sm text-blue-600 hover:text-blue-800"
+                        className="text-sm font-semibold text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
                     >
                         Show all rooms
                     </button>
                 </div>
             )}
 
-            <div className="overflow-x-auto bg-white rounded-lg shadow">
+            <div className="overflow-x-auto bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
                 <table className="w-full">
                     <thead>
-                        <tr className="border-b bg-gray-50">
-                            <th className="px-4 py-3 text-left font-semibold w-32 text-black">Time</th>
+                        <tr className="border-b border-slate-100 bg-slate-50">
+                            <th className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left w-32">Time</th>
                             {columns.map((room) => (
-                                <th key={room.id} className="px-4 py-3 text-left font-semibold border-l text-black">
+                                <th key={room.id} className="px-5 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-left border-l border-slate-100">
                                     Room {room.roomNumber || room.id}
                                 </th>
                             ))}
@@ -188,8 +200,8 @@ function Timeline({ columns, bookings, loading, selectedRoom, timeSlots, onClear
                     </thead>
                     <tbody>
                         {timeSlots.map((slot, i) => (
-                            <tr key={i} className="border-b hover:bg-gray-50">
-                                <td className="px-4 py-2 font-medium text-sm bg-gray-50 text-black">{slot}</td>
+                            <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                <td className="px-5 py-4 font-medium text-sm bg-slate-50 text-slate-900">{slot}</td>
                                 {columns.map((room) => {
                                     const booking = bookings.find(
                                         (b) =>
@@ -197,11 +209,11 @@ function Timeline({ columns, bookings, loading, selectedRoom, timeSlots, onClear
                                             isTimeInRange(slot, b.scheduledStart, b.scheduledEnd)
                                     );
                                     return (
-                                        <td key={`${room.id}-${i}`} className="px-4 py-2 border-l">
+                                        <td key={`${room.id}-${i}`} className="px-4 py-2 border-l border-slate-100">
                                             {booking && (
-                                                <div className={`p-2 rounded text-sm text-black ${STATUS_COLORS[booking.status] || 'bg-gray-100'}`}>
+                                                <div className={`p-2 rounded-lg text-sm text-slate-900 ${STATUS_COLORS[booking.status] || 'bg-slate-100'}`}>
                                                     <div className="font-semibold">{booking.procedureName}</div>
-                                                    <div className="text-xs">{booking.surgeonName}</div>
+                                                    <div className="text-xs text-slate-600">{booking.surgeonName}</div>
                                                 </div>
                                             )}
                                         </td>

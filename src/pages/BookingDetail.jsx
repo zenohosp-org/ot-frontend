@@ -66,8 +66,16 @@ export default function BookingDetail() {
         }
     };
 
-    if (loading) return <div className="p-8 text-black">Loading...</div>;
-    if (!booking) return <div className="p-8 text-black">Booking not found</div>;
+    if (loading) return (
+        <div className="flex items-center justify-center h-64">
+            <p className="text-sm font-medium text-slate-500">Loading...</p>
+        </div>
+    );
+    if (!booking) return (
+        <div className="flex items-center justify-center h-64">
+            <p className="text-sm font-medium text-slate-500">Booking not found</p>
+        </div>
+    );
 
     const canConfirm = booking.status === 'REQUESTED';
     const canStart = booking.status === 'CONFIRMED';
@@ -75,80 +83,87 @@ export default function BookingDetail() {
     const canCancel = ['REQUESTED', 'CONFIRMED', 'IN_PROGRESS'].includes(booking.status);
 
     return (
-        <div className="p-8">
-            <button onClick={() => navigate('/cases')} className="text-blue-600 hover:text-blue-800 mb-4">
-                ← Back to Cases
-            </button>
+        <div className="flex flex-col h-full bg-slate-50 gap-6 p-6">
+            <div className="flex items-center justify-between">
+                <button
+                    onClick={() => navigate('/cases')}
+                    className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
+                >
+                    ← Back to Cases
+                </button>
+            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2">
-                    <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 flex flex-col gap-6">
+                    {/* Main detail card */}
+                    <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
                         <div className="flex justify-between items-start mb-6">
                             <div>
-                                <h1 className="text-3xl font-bold mb-2 text-black">{booking.procedureName}</h1>
-                                <p className="text-black">Room: {booking.roomName} | Surgeon: {booking.surgeonName}</p>
+                                <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">{booking.procedureName}</h1>
+                                <p className="text-sm text-slate-500">Room: {booking.roomName} | Surgeon: {booking.surgeonName}</p>
                             </div>
-                            <div className={`px-4 py-2 rounded font-semibold ${getStatusColor(booking.status)}`}>
+                            <span className={`px-2.5 py-1 rounded-md text-xs font-semibold border inline-flex items-center ${getStatusColor(booking.status)}`}>
                                 {booking.status}
-                            </div>
+                            </span>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <p className="text-black text-sm">Patient</p>
-                                <p className="font-semibold text-black">{booking.patientName}</p>
-                                <p className="text-black text-sm">MRN: {booking.patientMrn}</p>
+                                <p className="text-sm text-slate-500">Patient</p>
+                                <p className="font-semibold text-slate-900">{booking.patientName}</p>
+                                <p className="text-sm text-slate-500 mt-0.5">MRN: {booking.patientMrn}</p>
                             </div>
                             <div>
-                                <p className="text-black text-sm">Scheduled Start</p>
-                                <p className="font-semibold text-black">{new Date(booking.scheduledStart).toLocaleString()}</p>
+                                <p className="text-sm text-slate-500">Scheduled Start</p>
+                                <p className="font-semibold text-slate-900">{new Date(booking.scheduledStart).toLocaleString()}</p>
                             </div>
                             <div>
-                                <p className="text-black text-sm">Scheduled End</p>
-                                <p className="font-semibold text-black">{new Date(booking.scheduledEnd).toLocaleString()}</p>
+                                <p className="text-sm text-slate-500">Scheduled End</p>
+                                <p className="font-semibold text-slate-900">{new Date(booking.scheduledEnd).toLocaleString()}</p>
                             </div>
                             {booking.actualStart && (
                                 <div>
-                                    <p className="text-black text-sm">Actual Start</p>
-                                    <p className="font-semibold text-black">{new Date(booking.actualStart).toLocaleString()}</p>
+                                    <p className="text-sm text-slate-500">Actual Start</p>
+                                    <p className="font-semibold text-slate-900">{new Date(booking.actualStart).toLocaleString()}</p>
                                 </div>
                             )}
                             {booking.actualEnd && (
                                 <div>
-                                    <p className="text-black text-sm">Actual End</p>
-                                    <p className="font-semibold text-black">{new Date(booking.actualEnd).toLocaleString()}</p>
+                                    <p className="text-sm text-slate-500">Actual End</p>
+                                    <p className="font-semibold text-slate-900">{new Date(booking.actualEnd).toLocaleString()}</p>
                                 </div>
                             )}
                         </div>
 
                         {booking.notes && (
-                            <div className="mt-4 p-3 bg-gray-50 rounded">
-                                <p className="text-black text-sm">Notes</p>
-                                <p className="text-black">{booking.notes}</p>
+                            <div className="mt-4 bg-slate-50 rounded-lg p-4 border border-slate-100">
+                                <p className="text-sm text-slate-500">Notes</p>
+                                <p className="text-sm font-medium text-slate-900 mt-0.5">{booking.notes}</p>
                             </div>
                         )}
                     </div>
 
-                    <div className="bg-white rounded-lg shadow p-6">
-                        <h2 className="text-xl font-bold mb-4 text-black">Consumption Items</h2>
+                    {/* Consumption card */}
+                    <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
+                        <h2 className="text-sm font-bold text-slate-900 mb-4">Consumption Items</h2>
 
                         <div className="space-y-3 mb-6">
                             {consumption.length === 0 ? (
-                                <p className="text-black">No consumption items added</p>
+                                <p className="text-sm text-slate-500">No consumption items added</p>
                             ) : (
                                 consumption.map(item => (
-                                    <div key={item.id} className="flex justify-between items-center p-3 border rounded hover:bg-gray-50">
+                                    <div key={item.id} className="flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                                         <div className="flex-1">
-                                            <p className="font-semibold text-black">{item.itemName}</p>
-                                            <p className="text-black text-sm">
+                                            <p className="text-sm font-semibold text-slate-900">{item.itemName}</p>
+                                            <p className="text-xs text-slate-500 mt-0.5">
                                                 {item.itemType} • Qty: {item.quantity} • ₹{item.unitPrice.toFixed(2)} each
                                             </p>
                                         </div>
                                         <button
                                             onClick={() => handleDeleteConsumption(item.id)}
-                                            className="text-red-600 hover:text-red-800 ml-4"
+                                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors"
                                         >
-                                            <Trash2 size={20} />
+                                            <Trash2 size={16} />
                                         </button>
                                     </div>
                                 ))
@@ -157,7 +172,7 @@ export default function BookingDetail() {
 
                         <button
                             onClick={() => setShowAddConsumption(true)}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition"
+                            className="w-full bg-slate-900 hover:bg-slate-700 text-white font-semibold px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-all text-sm"
                         >
                             Add Consumption Item
                         </button>
@@ -175,16 +190,17 @@ export default function BookingDetail() {
                     </div>
                 </div>
 
+                {/* Actions sidebar */}
                 <div>
-                    <div className="bg-white rounded-lg shadow p-6 sticky top-8">
-                        <h3 className="text-lg font-bold mb-4 text-black">Actions</h3>
+                    <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6 sticky top-6">
+                        <h3 className="text-sm font-bold text-slate-900 mb-4">Actions</h3>
 
                         <div className="space-y-3">
                             {canConfirm && (
                                 <button
                                     onClick={() => handleStatusChange('confirm')}
                                     disabled={actionLoading}
-                                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg transition-all text-sm disabled:opacity-50"
                                 >
                                     Confirm Booking
                                 </button>
@@ -194,7 +210,7 @@ export default function BookingDetail() {
                                 <button
                                     onClick={() => handleStatusChange('start')}
                                     disabled={actionLoading}
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                                    className="w-full bg-slate-900 hover:bg-slate-700 text-white font-semibold px-4 py-2 rounded-lg transition-all text-sm disabled:opacity-50"
                                 >
                                     Start Surgery
                                 </button>
@@ -204,7 +220,7 @@ export default function BookingDetail() {
                                 <button
                                     onClick={() => handleStatusChange('end')}
                                     disabled={actionLoading}
-                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                                    className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg transition-all text-sm disabled:opacity-50"
                                 >
                                     End Surgery
                                 </button>
@@ -218,7 +234,7 @@ export default function BookingDetail() {
                                         }
                                     }}
                                     disabled={actionLoading}
-                                    className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                                    className="w-full bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 font-semibold px-4 py-2 rounded-lg transition-all text-sm disabled:opacity-50"
                                 >
                                     Cancel Booking
                                 </button>
@@ -233,13 +249,13 @@ export default function BookingDetail() {
 
 function getStatusColor(status) {
     const colors = {
-        REQUESTED: 'bg-gray-300 text-gray-900 font-semibold',
-        CONFIRMED: 'bg-blue-300 text-blue-900 font-semibold',
-        IN_PROGRESS: 'bg-green-400 text-green-900 font-bold',
-        COMPLETED: 'bg-slate-300 text-slate-900 font-semibold',
-        CANCELLED: 'bg-red-300 text-red-900 font-semibold',
+        REQUESTED: 'bg-slate-100 text-slate-700 border-slate-200',
+        CONFIRMED: 'bg-blue-50 text-blue-700 border-blue-200',
+        IN_PROGRESS: 'bg-amber-50 text-amber-700 border-amber-200',
+        COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        CANCELLED: 'bg-rose-50 text-rose-600 border-rose-200',
     };
-    return colors[status] || 'bg-gray-300 text-gray-900';
+    return colors[status] || 'bg-slate-100 text-slate-700 border-slate-200';
 }
 
 function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
@@ -322,23 +338,27 @@ function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
-                <div className="p-6 border-b flex justify-between items-center">
-                    <h2 className="text-xl font-bold">Add Consumption Item</h2>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+        <div className="fixed inset-0 z-50 w-full min-h-screen flex items-start justify-center overflow-y-auto p-4 pt-10">
+            <div className="absolute inset-0 w-full min-h-screen bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl my-8 overflow-hidden border border-slate-200 relative z-10">
+                <div className="flex items-center justify-between p-6 border-b border-slate-100">
+                    <h2 className="text-lg font-bold text-slate-900">Add Consumption Item</h2>
+                    <button
+                        onClick={onClose}
+                        className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
+                    >✕</button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     {error && (
-                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded text-sm">
+                        <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-lg text-sm">
                             {error}
                         </div>
                     )}
 
                     {formData.itemType === 'KIT' ? (
                         <div className="relative">
-                            <label className="block text-sm font-semibold mb-2">Select Kit</label>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Select Kit</label>
                             <input
                                 type="text"
                                 placeholder={loadingKits ? 'Loading kits...' : 'Search kit name/code...'}
@@ -348,50 +368,50 @@ function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
                                     setShowKitDropdown(true);
                                 }}
                                 onFocus={() => setShowKitDropdown(true)}
-                                className="w-full border rounded px-3 py-2"
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
                             />
 
                             {showKitDropdown && filteredKits.length > 0 && (
-                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
+                                <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden z-10 max-h-48 overflow-y-auto">
                                     {filteredKits.map((kit) => (
                                         <button
                                             key={kit.id}
                                             type="button"
                                             onClick={() => handleKitSelect(kit)}
-                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0"
+                                            className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
                                         >
-                                            <p className="font-semibold">{kit.name}</p>
-                                            {kit.code && <p className="text-xs text-gray-600">Code: {kit.code}</p>}
+                                            <p className="font-semibold text-slate-900">{kit.name}</p>
+                                            {kit.code && <p className="text-xs text-slate-500 mt-0.5">Code: {kit.code}</p>}
                                         </button>
                                     ))}
                                 </div>
                             )}
 
                             {formData.inventoryItemId && (
-                                <p className="mt-2 text-sm text-gray-700">
-                                    Selected: <span className="font-semibold">{formData.itemName}</span>
+                                <p className="mt-2 text-sm text-slate-700">
+                                    Selected: <span className="font-semibold text-slate-900">{formData.itemName}</span>
                                 </p>
                             )}
                         </div>
                     ) : (
                         <div>
-                            <label className="block text-sm font-semibold mb-2">Item Name</label>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Item Name</label>
                             <input
                                 type="text"
                                 value={formData.itemName}
                                 onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
-                                className="w-full border rounded px-3 py-2"
+                                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
                                 required
                             />
                         </div>
                     )}
 
                     <div>
-                        <label className="block text-sm font-semibold mb-2">Type</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Type</label>
                         <select
                             value={formData.itemType}
                             onChange={(e) => setFormData({ ...formData, itemType: e.target.value, itemName: '', inventoryItemId: null })}
-                            className="w-full border rounded px-3 py-2"
+                            className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
                         >
                             <option>KIT</option>
                             <option>IMPLANT</option>
@@ -400,24 +420,24 @@ function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold mb-2">Quantity</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Quantity</label>
                         <input
                             type="number"
                             value={formData.quantity}
                             onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                            className="w-full border rounded px-3 py-2"
+                            className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
                             min="1"
                             required
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold mb-2">Unit Price</label>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unit Price</label>
                         <input
                             type="number"
                             value={formData.unitPrice}
                             onChange={(e) => setFormData({ ...formData, unitPrice: e.target.value })}
-                            className="w-full border rounded px-3 py-2"
+                            className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 text-sm transition-all"
                             step="0.01"
                             required
                         />
@@ -430,21 +450,21 @@ function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
                             onChange={(e) => setFormData({ ...formData, billable: e.target.checked })}
                             className="w-4 h-4 mr-2"
                         />
-                        <label className="text-sm font-semibold">Billable</label>
+                        <label className="text-sm font-medium text-slate-700">Billable</label>
                     </div>
 
                     <div className="flex gap-4 pt-4">
                         <button
                             type="submit"
                             disabled={loading}
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                            className="flex-1 bg-slate-900 hover:bg-slate-700 text-white font-semibold py-2.5 rounded-lg transition-all text-sm disabled:opacity-50"
                         >
                             {loading ? 'Adding...' : 'Add Item'}
                         </button>
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 rounded-lg transition"
+                            className="flex-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold py-2.5 rounded-lg transition-all text-sm"
                         >
                             Cancel
                         </button>
