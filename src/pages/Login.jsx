@@ -17,7 +17,7 @@ export default function Login() {
     }, [user]);
 
     const handleLogin = () => {
-        const backendUrl = import.meta.env.VITE_API_BASE_URL || 'https://api-ot.zenohosp.com';
+        const backendUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'https://api-ot.zenohosp.com';
         window.location.href = `${backendUrl}/oauth2/authorization/directory`;
     };
 

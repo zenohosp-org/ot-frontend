@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getBookings, createBooking, addConsumptionItem, getHmsPatients, getHmsRooms, getDirectorySurgeons, getInventoryKits, getOtAdmissions } from '../api/client';
+import { getBookings, createBooking, addConsumptionItem, getHmsPatients, getHmsRooms, getHmsDoctors, getDirectorySurgeons, getInventoryKits, getOtAdmissions } from '../api/client';
 import { Plus, Search, Trash2 } from 'lucide-react';
 
 const MAX_RETRIES = 3;
@@ -217,6 +217,7 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
     const [surgeonSearch, setSurgeonSearch] = useState('');
     const [showSurgeonDropdown, setShowSurgeonDropdown] = useState(false);
     const [searchingSurgeons, setSearchingSurgeons] = useState(false);
+    const [specialization, setSpecialization] = useState('');
     const [rooms, setRooms] = useState([]);
     const [allRooms, setAllRooms] = useState([]);
     const [roomSearch, setRoomSearch] = useState('');
@@ -406,10 +407,10 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
 
         setSearchingSurgeons(true);
         try {
-            const res = await getDirectorySurgeons(query);
+            const res = await getHmsDoctors(query, specialization || undefined);
             setSurgeons(res.data || []);
         } catch (error) {
-            console.error('Error searching surgeons:', error);
+            console.error('Error searching doctors:', error);
             setSurgeons([]);
         } finally {
             setSearchingSurgeons(false);
@@ -731,6 +732,30 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
                             </div>
                         )}
 
+                        {/* Specialization Filter */}
+                        <div>
+                            <label className="block text-sm font-semibold text-black mb-2">Doctor Specialization (Optional)</label>
+                            <select
+                                value={specialization}
+                                onChange={(e) => {
+                                    setSpecialization(e.target.value);
+                                    setSurgeons([]);
+                                    setSurgeonSearch('');
+                                }}
+                                className="w-full border rounded px-3 py-2 text-black bg-white"
+                            >
+                                <option value="">All Specializations</option>
+                                <option value="Cardiology">Cardiology</option>
+                                <option value="Orthopedics">Orthopedics</option>
+                                <option value="Neurosurgery">Neurosurgery</option>
+                                <option value="General Surgery">General Surgery</option>
+                                <option value="ENT">ENT</option>
+                                <option value="Ophthalmology">Ophthalmology</option>
+                                <option value="Urology">Urology</option>
+                                <option value="Oncology">Oncology</option>
+                            </select>
+                        </div>
+
                         {/* Surgeon Search */}
                         <div className="relative">
                             <label className="block text-sm font-semibold text-black mb-2">Search Surgeon</label>
@@ -763,6 +788,7 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
                                             className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0 text-black"
                                         >
                                             <p className="font-semibold">{surgeon.name || `${surgeon.firstName} ${surgeon.lastName}`}</p>
+                                            {surgeon.specialization && <p className="text-xs text-blue-600">{surgeon.specialization}</p>}
                                             <p className="text-xs text-gray-600">{surgeon.email}</p>
                                         </button>
                                     ))}
