@@ -874,25 +874,13 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
                             />
                         </div>
 
-                        {/* Inventory Kits - Add to Cart Style */}
-                        <div className="col-span-2">
-                            <div className="flex items-center justify-between mb-3">
-                                <label className="block text-sm font-semibold text-black">
-                                    Available Kits {selectedKits.length > 0 && <span className="text-blue-600">({selectedKits.length} selected)</span>}
-                                </label>
-                                {kitSearch && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setKitSearch('')}
-                                        className="text-xs text-gray-500 hover:text-gray-700"
-                                    >
-                                        Clear filter
-                                    </button>
-                                )}
-                            </div>
-
+                        {/* Inventory Kits - Dropdown Search like Room */}
+                        <div className="col-span-2 relative">
+                            <label className="block text-sm font-semibold text-black mb-2">
+                                Inventory Kits {kitError && <span className="text-xs text-gray-600">(Manual entry)</span>}
+                            </label>
                             {kitError && (
-                                <div className={`mb-3 text-xs p-2 rounded flex items-center gap-2 ${
+                                <div className={`mb-2 text-xs p-2 rounded flex items-center gap-2 ${
                                     retryingKits ? 'text-blue-600 bg-blue-50' : 'text-amber-600 bg-amber-50'
                                 }`}>
                                     {retryingKits && (
@@ -901,85 +889,49 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
                                     {kitError}
                                 </div>
                             )}
-
-                            {/* Search/Filter */}
-                            {!kitError && (
-                                <div className="relative mb-3">
-                                    <div className="absolute left-3 top-2.5 text-gray-400">
-                                        <Search size={18} />
+                            <div className="relative">
+                                <div className="absolute left-3 top-3 text-gray-400">
+                                    <Search size={18} />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder={kitError ? 'Enter kit name...' : 'Search kit...'}
+                                    value={kitSearch}
+                                    onChange={handleKitSearchChange}
+                                    onFocus={() => {
+                                        if (!kitError) {
+                                            setShowKitDropdown(true);
+                                            updateKitOptions(kitSearch);
+                                        }
+                                    }}
+                                    className="w-full border rounded px-10 py-2 text-black"
+                                />
+                                {loadingKits && (
+                                    <div className="absolute right-3 top-3">
+                                        <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent"></div>
                                     </div>
-                                    <input
-                                        type="text"
-                                        placeholder="Filter kits by name or code..."
-                                        value={kitSearch}
-                                        onChange={handleKitSearchChange}
-                                        className="w-full border rounded px-10 py-2 text-black"
-                                    />
-                                    {loadingKits && (
-                                        <div className="absolute right-3 top-2.5">
-                                            <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent"></div>
-                                        </div>
-                                    )}
+                                )}
+                            </div>
+
+                            {!kitError && showKitDropdown && kits.length > 0 && (
+                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
+                                    {kits.map((kit) => (
+                                        <button
+                                            key={kit.id}
+                                            type="button"
+                                            onClick={() => handleAddKit(kit)}
+                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0 text-black"
+                                        >
+                                            <p className="font-semibold">{kit.name}</p>
+                                            <p className="text-xs text-gray-600">Code: {kit.code}</p>
+                                        </button>
+                                    ))}
                                 </div>
                             )}
 
-                            {/* Kits Grid */}
-                            {!kitError && kits.length > 0 && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 max-h-48 overflow-y-auto border rounded p-3 bg-gray-50">
-                                    {kits.map((kit) => {
-                                        const isSelected = selectedKits.some(k => k.id === kit.id);
-                                        return (
-                                            <div
-                                                key={kit.id}
-                                                className={`p-3 rounded border-2 transition cursor-pointer ${
-                                                    isSelected
-                                                        ? 'border-blue-600 bg-blue-50'
-                                                        : 'border-gray-200 bg-white hover:border-blue-400'
-                                                }`}
-                                                onClick={() => {
-                                                    if (!isSelected) {
-                                                        handleAddKit(kit);
-                                                    }
-                                                }}
-                                            >
-                                                <div className="flex items-start justify-between">
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="font-semibold text-black text-sm truncate">{kit.name}</p>
-                                                        <p className="text-xs text-gray-500">{kit.code}</p>
-                                                        {kit.price && (
-                                                            <p className="text-sm font-semibold text-green-600 mt-1">₹{kit.price.toLocaleString('en-IN')}</p>
-                                                        )}
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            if (isSelected) {
-                                                                handleRemoveKit(kit.id);
-                                                            } else {
-                                                                handleAddKit(kit);
-                                                            }
-                                                        }}
-                                                        className={`ml-2 px-2 py-1 rounded text-xs font-semibold whitespace-nowrap transition ${
-                                                            isSelected
-                                                                ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                                                                : 'bg-blue-600 text-white hover:bg-blue-700'
-                                                        }`}
-                                                    >
-                                                        {isSelected ? 'Remove' : 'Add'}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {!kitError && kits.length === 0 && !loadingKits && (
-                                <div className="text-center py-8 bg-gray-50 rounded border-2 border-dashed">
-                                    <p className="text-gray-500 text-sm">
-                                        {kitSearch ? 'No kits found matching your search' : 'No kits available'}
-                                    </p>
+                            {!kitError && showKitDropdown && kits.length === 0 && !loadingKits && (
+                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 p-3 text-gray-600 text-sm">
+                                    No kits found
                                 </div>
                             )}
 
@@ -1000,45 +952,39 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
                                 </button>
                             )}
 
-                            {/* Cart Summary */}
                             {selectedKits.length > 0 && (
-                                <div className="mt-4 border-t pt-4">
-                                    <h3 className="text-sm font-semibold text-black mb-3">Cart ({selectedKits.length} items)</h3>
-                                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                                        {selectedKits.map((kit) => (
-                                            <div key={kit.id} className="flex gap-2 items-center bg-blue-50 p-2 rounded border border-blue-200">
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-semibold text-black truncate">{kit.name}</p>
-                                                </div>
-                                                <div className="flex items-center gap-1">
-                                                    <input
-                                                        type="number"
-                                                        min="1"
-                                                        value={kit.quantity}
-                                                        onChange={(e) => handleKitQuantityChange(kit.id, e.target.value)}
-                                                        className="w-12 border rounded px-1 py-0.5 text-black text-xs"
-                                                    />
-                                                    <span className="text-xs text-gray-600 w-6">Qty</span>
-                                                </div>
-                                                <input
-                                                    type="number"
-                                                    step="0.01"
-                                                    min="0"
-                                                    value={kit.unitPrice}
-                                                    onChange={(e) => handleKitPriceChange(kit.id, e.target.value)}
-                                                    className="w-16 border rounded px-1 py-0.5 text-black text-xs"
-                                                    title="Unit price"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRemoveKit(kit.id)}
-                                                    className="text-red-600 hover:text-red-800 ml-1"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
+                                <div className="space-y-2 mt-3 bg-gray-50 p-3 rounded">
+                                    {selectedKits.map((kit) => (
+                                        <div key={kit.id} className="flex gap-2 items-center bg-white p-2 rounded border">
+                                            <div className="flex-1">
+                                                <p className="text-sm font-semibold text-black">{kit.name}</p>
                                             </div>
-                                        ))}
-                                    </div>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={kit.quantity}
+                                                onChange={(e) => handleKitQuantityChange(kit.id, e.target.value)}
+                                                className="w-16 border rounded px-2 py-1 text-black text-sm"
+                                            />
+                                            <span className="text-xs text-black">Qty</span>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={kit.unitPrice}
+                                                onChange={(e) => handleKitPriceChange(kit.id, e.target.value)}
+                                                className="w-20 border rounded px-2 py-1 text-black text-sm"
+                                            />
+                                            <span className="text-xs text-black">₹</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveKit(kit.id)}
+                                                className="text-red-600 hover:text-red-800"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
