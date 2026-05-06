@@ -6,6 +6,7 @@ import {
     confirmBooking,
     startBooking,
     endBooking,
+    sanitizeBooking,
     cancelBooking,
     addConsumptionItem,
     deleteConsumptionItem,
@@ -21,6 +22,7 @@ export default function BookingDetail() {
     const [loading, setLoading] = useState(true);
     const [showAddConsumption, setShowAddConsumption] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
+    const [actionError, setActionError] = useState(null);
 
     useEffect(() => {
         fetchBooking();
@@ -42,16 +44,18 @@ export default function BookingDetail() {
 
     const handleStatusChange = async (action) => {
         setActionLoading(true);
+        setActionError(null);
         try {
             let result;
             if (action === 'confirm') result = await confirmBooking(id);
             else if (action === 'start') result = await startBooking(id);
             else if (action === 'end') result = await endBooking(id);
+            else if (action === 'sanitize') result = await sanitizeBooking(id);
             else if (action === 'cancel') result = await cancelBooking(id);
 
             setBooking(result.data);
         } catch (error) {
-            alert('Error: ' + (error.response?.data?.message || error.message));
+            setActionError(error.response?.data?.message || error.message || 'An error occurred');
         } finally {
             setActionLoading(false);
         }
@@ -62,7 +66,7 @@ export default function BookingDetail() {
             await deleteConsumptionItem(itemId);
             setConsumption(consumption.filter(c => c.id !== itemId));
         } catch (error) {
-            alert('Error deleting item: ' + error.message);
+            setActionError('Error deleting item: ' + (error.response?.data?.message || error.message));
         }
     };
 
@@ -72,6 +76,7 @@ export default function BookingDetail() {
     const canConfirm = booking.status === 'REQUESTED';
     const canStart = booking.status === 'CONFIRMED';
     const canEnd = booking.status === 'IN_PROGRESS';
+    const canSanitize = booking.status === 'PENDING_SANITATION';
     const canCancel = ['REQUESTED', 'CONFIRMED', 'IN_PROGRESS'].includes(booking.status);
 
     return (
@@ -179,6 +184,12 @@ export default function BookingDetail() {
                     <div className="bg-white rounded-lg shadow p-6 sticky top-8">
                         <h3 className="text-lg font-bold mb-4 text-black">Actions</h3>
 
+                        {actionError && (
+                            <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded text-sm mb-4">
+                                {actionError}
+                            </div>
+                        )}
+
                         <div className="space-y-3">
                             {canConfirm && (
                                 <button
@@ -210,6 +221,20 @@ export default function BookingDetail() {
                                 </button>
                             )}
 
+                            {canSanitize && (
+                                <button
+                                    onClick={() => {
+                                        if (confirm('Is the room sanitation complete?')) {
+                                            handleStatusChange('sanitize');
+                                        }
+                                    }}
+                                    disabled={actionLoading}
+                                    className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+                                >
+                                    Mark Sanitation Complete
+                                </button>
+                            )}
+
                             {canCancel && (
                                 <button
                                     onClick={() => {
@@ -236,6 +261,7 @@ function getStatusColor(status) {
         REQUESTED: 'bg-gray-300 text-gray-900 font-semibold',
         CONFIRMED: 'bg-blue-300 text-blue-900 font-semibold',
         IN_PROGRESS: 'bg-green-400 text-green-900 font-bold',
+        PENDING_SANITATION: 'bg-amber-300 text-amber-900 font-semibold',
         COMPLETED: 'bg-slate-300 text-slate-900 font-semibold',
         CANCELLED: 'bg-red-300 text-red-900 font-semibold',
     };
@@ -379,7 +405,8 @@ function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
                             <input
                                 type="text"
                                 value={formData.itemName}
-                                onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
+                                onChange={(e) => setFormData({ ...formData, itemName: e.target.value.slice(0, 255) })}
+                                maxLength={255}
                                 className="w-full border rounded px-3 py-2"
                                 required
                             />

@@ -65,6 +65,7 @@ export default function Cases() {
             REQUESTED: 'bg-gray-200 text-gray-900',
             CONFIRMED: 'bg-blue-200 text-blue-900 font-semibold',
             IN_PROGRESS: 'bg-green-300 text-green-900 font-semibold',
+            PENDING_SANITATION: 'bg-amber-200 text-amber-900 font-semibold',
             COMPLETED: 'bg-slate-200 text-slate-900',
             CANCELLED: 'bg-red-200 text-red-900',
         };
@@ -650,7 +651,8 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
                             type="text"
                             placeholder="Procedure Name"
                             value={formData.procedureName}
-                            onChange={(e) => setFormData({ ...formData, procedureName: e.target.value })}
+                            onChange={(e) => setFormData({ ...formData, procedureName: e.target.value.slice(0, 300) })}
+                            maxLength={300}
                             className="border rounded px-3 py-2 text-black"
                             required
                         />
@@ -944,7 +946,8 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
                             <textarea
                                 placeholder="Notes"
                                 value={formData.notes}
-                                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                onChange={(e) => setFormData({ ...formData, notes: e.target.value.slice(0, 1000) })}
+                                maxLength={1000}
                                 className="w-full border rounded px-3 py-2 text-black"
                                 rows="2"
                             />

@@ -64,6 +64,7 @@ export const updateBooking = (id, data) => api.put(`/api/ot/bookings/${id}`, dat
 export const confirmBooking = (id) => api.patch(`/api/ot/bookings/${id}/confirm`);
 export const startBooking = (id) => api.patch(`/api/ot/bookings/${id}/start`);
 export const endBooking = (id) => api.patch(`/api/ot/bookings/${id}/end`);
+export const sanitizeBooking = (id) => api.patch(`/api/ot/bookings/${id}/sanitize`);
 export const cancelBooking = (id) => api.patch(`/api/ot/bookings/${id}/cancel`);
 
 export const getConsumption = (bookingId) => api.get(`/api/ot/bookings/${bookingId}/consumption`);

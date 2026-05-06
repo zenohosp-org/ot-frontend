@@ -26,6 +26,7 @@ const STATUS_COLORS = {
     REQUESTED: 'bg-gray-200',
     CONFIRMED: 'bg-blue-200',
     IN_PROGRESS: 'bg-green-200 animate-pulse',
+    PENDING_SANITATION: 'bg-amber-200',
     COMPLETED: 'bg-slate-200',
     CANCELLED: 'bg-red-200',
 };
