@@ -2,31 +2,21 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     getBookings, createBooking, addConsumptionItem,
-    getHmsPatients, getHmsRooms, getHmsDoctors,
-    getInventoryKits, getActiveAdmissions,
+    getHmsPatients, getHmsDoctors,
+    getInventoryKits, getActiveAdmissions, getAvailableRooms,
 } from '../api/client';
-import { Plus, Search, Trash2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
-
-const MAX_RETRIES = 3;
-
-function isOtRoom(room) {
-    return room?.roomType === 'OT' ||
-        (room?.roomNumber || '').toString().toLowerCase().includes('ot') ||
-        (room?.roomCode || '').toString().toLowerCase().includes('ot');
-}
-
-function overlapsWithBuffer(desiredStart, desiredEnd, existingStart, existingEnd, bufferMinutes = 30) {
-    const desiredEndWithBuffer = new Date(desiredEnd.getTime() + bufferMinutes * 60 * 1000);
-    return existingStart < desiredEndWithBuffer && existingEnd > desiredStart;
-}
+import {
+    Plus, Search, Trash2, AlertCircle, CheckCircle2, XCircle,
+    Calendar, Lock, Loader2, X,
+} from 'lucide-react';
 
 const STATUS_CONFIG = {
-    REQUESTED:          { label: 'Requested',          classes: 'bg-gray-100 text-gray-700 border border-gray-300' },
-    CONFIRMED:          { label: 'Confirmed',           classes: 'bg-blue-100 text-blue-800 border border-blue-300' },
-    IN_PROGRESS:        { label: 'In Progress',         classes: 'bg-green-100 text-green-800 border border-green-300' },
-    PENDING_SANITATION: { label: 'Pending Sanitation',  classes: 'bg-amber-100 text-amber-800 border border-amber-300' },
-    COMPLETED:          { label: 'Completed',           classes: 'bg-slate-100 text-slate-700 border border-slate-300' },
-    CANCELLED:          { label: 'Cancelled',           classes: 'bg-red-100 text-red-700 border border-red-300' },
+    REQUESTED:          { label: 'Requested',          classes: 'bg-gray-100 text-gray-700 border border-gray-200' },
+    CONFIRMED:          { label: 'Confirmed',           classes: 'bg-blue-100 text-blue-800 border border-blue-200' },
+    IN_PROGRESS:        { label: 'In Progress',         classes: 'bg-green-100 text-green-800 border border-green-200' },
+    PENDING_SANITATION: { label: 'Pending Sanitation',  classes: 'bg-amber-100 text-amber-800 border border-amber-200' },
+    COMPLETED:          { label: 'Completed',           classes: 'bg-slate-100 text-slate-700 border border-slate-200' },
+    CANCELLED:          { label: 'Cancelled',           classes: 'bg-red-100 text-red-700 border border-red-200' },
 };
 
 function StatusBadge({ status }) {
@@ -56,7 +46,7 @@ export default function Cases() {
     const [bookings, setBookings] = useState([]);
     const [admissions, setAdmissions] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showModal, setShowModal] = useState(false);
+    const [showDrawer, setShowDrawer] = useState(false);
     const [prefilledPatient, setPrefilledPatient] = useState(null);
     const navigate = useNavigate();
 
@@ -90,10 +80,8 @@ export default function Cases() {
             patientId: admission.patientId,
             patientName: admission.patientName,
             patientMrn: admission.patientMrn,
-            roomId: admission.roomType === 'OT' ? admission.roomId : '',
-            roomName: admission.roomType === 'OT' ? admission.roomNumber : '',
         });
-        setShowModal(true);
+        setShowDrawer(true);
     };
 
     const activeAdmissions = admissions.filter(a =>
@@ -106,37 +94,35 @@ export default function Cases() {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <Loader2 size={24} className="animate-spin text-blue-600" />
             </div>
         );
     }
 
     return (
         <div className="p-6 space-y-6">
-            {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Cases</h1>
                     <p className="text-sm text-gray-500 mt-0.5">Manage OT bookings and surgical cases</p>
                 </div>
                 <button
-                    onClick={() => setShowModal(true)}
-                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                    onClick={() => setShowDrawer(true)}
+                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
                 >
                     <Plus size={16} />
                     New Booking
                 </button>
             </div>
 
-            {/* Admitted Patients Panel */}
             {activeAdmissions.length > 0 && (
                 <section>
                     <div className="flex items-center gap-2 mb-3">
-                        <AlertCircle size={16} className="text-amber-600" />
-                        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                        <AlertCircle size={15} className="text-amber-500" />
+                        <h2 className="text-sm font-semibold text-gray-700">
                             Admitted Patients Awaiting OT Booking
                         </h2>
-                        <span className="ml-1 bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                        <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">
                             {activeAdmissions.length}
                         </span>
                     </div>
@@ -152,20 +138,19 @@ export default function Cases() {
                 </section>
             )}
 
-            {/* Bookings Table */}
             <section>
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                         <h2 className="text-sm font-semibold text-gray-700">All Bookings</h2>
-                        <span className="text-xs text-gray-500">{bookings.length} total</span>
+                        <span className="text-xs text-gray-400">{bookings.length} total</span>
                     </div>
 
                     {bookings.length === 0 ? (
                         <div className="py-16 text-center">
-                            <CheckCircle2 size={40} className="mx-auto text-gray-300 mb-3" />
+                            <CheckCircle2 size={40} className="mx-auto text-gray-200 mb-3" />
                             <p className="text-gray-500 text-sm">No bookings yet</p>
                             <button
-                                onClick={() => setShowModal(true)}
+                                onClick={() => setShowDrawer(true)}
                                 className="mt-3 text-blue-600 hover:text-blue-800 text-sm font-medium"
                             >
                                 Create the first booking
@@ -200,12 +185,12 @@ export default function Cases() {
                 </div>
             </section>
 
-            {showModal && (
-                <CreateBookingModal
+            {showDrawer && (
+                <CreateBookingDrawer
                     prefilled={prefilledPatient}
-                    onClose={() => { setShowModal(false); setPrefilledPatient(null); }}
+                    onClose={() => { setShowDrawer(false); setPrefilledPatient(null); }}
                     onSuccess={() => {
-                        setShowModal(false);
+                        setShowDrawer(false);
                         setPrefilledPatient(null);
                         fetchBookings();
                         fetchAdmissions();
@@ -219,11 +204,11 @@ export default function Cases() {
 function AdmissionCard({ admission, onBook }) {
     const isOT = admission.roomType === 'OT';
     return (
-        <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm flex flex-col gap-3">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col gap-3">
             <div>
                 <p className="font-semibold text-gray-900 text-sm">{admission.patientName}</p>
                 <p className="text-xs text-gray-500 mt-0.5">MRN: {admission.patientMrn}</p>
-                <div className="flex items-center gap-1.5 mt-1.5">
+                <div className="flex items-center gap-1.5 mt-2">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
                         ${isOT ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
                         {admission.roomNumber || 'No room'}
@@ -233,7 +218,7 @@ function AdmissionCard({ admission, onBook }) {
             </div>
             <button
                 onClick={onBook}
-                className="w-full inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition-colors"
+                className="w-full inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
             >
                 <Plus size={13} />
                 Book for OT
@@ -244,10 +229,7 @@ function AdmissionCard({ admission, onBook }) {
 
 function BookingRow({ booking, onClick }) {
     return (
-        <tr
-            className="hover:bg-gray-50 cursor-pointer transition-colors"
-            onClick={onClick}
-        >
+        <tr className="hover:bg-gray-50 cursor-pointer transition-colors" onClick={onClick}>
             <td className="px-6 py-4">
                 <p className="font-semibold text-gray-900">{booking.patientName}</p>
                 {booking.patientMrn && (
@@ -284,10 +266,7 @@ function BookingRow({ booking, onClick }) {
                 <StatusBadge status={booking.status} />
             </td>
             <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
-                <button
-                    onClick={onClick}
-                    className="text-blue-600 hover:text-blue-800 font-medium"
-                >
+                <button onClick={onClick} className="text-blue-600 hover:text-blue-800 font-medium text-sm">
                     View
                 </button>
             </td>
@@ -295,34 +274,25 @@ function BookingRow({ booking, onClick }) {
     );
 }
 
-// ─── Create Booking Modal ─────────────────────────────────────────────────────
+// ─── Create Booking Drawer ─────────────────────────────────────────────────────
 
-function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
-    const [loading, setLoading] = useState(false);
+const MAX_RETRIES = 3;
+
+function CreateBookingDrawer({ onClose, onSuccess, prefilled = null }) {
+    const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
 
-    // Patient
     const [patients, setPatients] = useState([]);
     const [patientSearch, setPatientSearch] = useState('');
     const [showPatientDrop, setShowPatientDrop] = useState(false);
     const [searchingPatients, setSearchingPatients] = useState(false);
 
-    // Room
-    const [allRooms, setAllRooms] = useState([]);
-    const [rooms, setRooms] = useState([]);
-    const [roomSearch, setRoomSearch] = useState('');
-    const [showRoomDrop, setShowRoomDrop] = useState(false);
-    const [loadingRooms, setLoadingRooms] = useState(false);
-    const [roomError, setRoomError] = useState(null);
-
-    // Surgeon
     const [surgeons, setSurgeons] = useState([]);
     const [surgeonSearch, setSurgeonSearch] = useState('');
     const [showSurgeonDrop, setShowSurgeonDrop] = useState(false);
     const [searchingSurgeons, setSearchingSurgeons] = useState(false);
     const [specialization, setSpecialization] = useState('');
 
-    // Kits
     const [allKits, setAllKits] = useState([]);
     const [kitSearch, setKitSearch] = useState('');
     const [showKitDrop, setShowKitDrop] = useState(false);
@@ -330,10 +300,7 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
     const [kitError, setKitError] = useState(null);
     const [selectedKits, setSelectedKits] = useState([]);
 
-    // Day bookings for conflict preview
-    const [dayBookings, setDayBookings] = useState([]);
-
-    const retryTimeout = useRef({ rooms: null, kits: null });
+    const kitRetry = useRef(null);
 
     const [form, setForm] = useState({
         patientId: prefilled?.patientId ?? '',
@@ -341,8 +308,8 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
         patientMrn: prefilled?.patientMrn ?? '',
         procedureName: '',
         procedureCharge: '',
-        roomId: prefilled?.roomId ?? '',
-        roomName: prefilled?.roomName ?? '',
+        roomId: '',
+        roomName: '',
         surgeonId: '',
         surgeonName: '',
         scheduledStart: '',
@@ -350,28 +317,7 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
         notes: '',
     });
 
-    // Load rooms
     useEffect(() => {
-        const fetchRooms = async (retry = 0) => {
-            if (retry === 0) setLoadingRooms(true);
-            setRoomError(null);
-            try {
-                const res = await getHmsRooms();
-                const otRooms = (res.data || []).filter(isOtRoom);
-                setAllRooms(otRooms);
-                setRooms(otRooms);
-            } catch {
-                if (retry < MAX_RETRIES) {
-                    setRoomError('Retrying room list...');
-                    retryTimeout.current.rooms = setTimeout(() => fetchRooms(retry + 1), 4000);
-                } else {
-                    setRoomError('Could not load rooms. Enter manually.');
-                }
-            } finally {
-                if (retry === 0) setLoadingRooms(false);
-            }
-        };
-
         const fetchKits = async (retry = 0) => {
             if (retry === 0) setLoadingKits(true);
             setKitError(null);
@@ -380,8 +326,8 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
                 setAllKits(res.data || []);
             } catch {
                 if (retry < MAX_RETRIES) {
-                    setKitError('Loading inventory kits...');
-                    retryTimeout.current.kits = setTimeout(() => fetchKits(retry + 1), 4000);
+                    setKitError('Loading inventory...');
+                    kitRetry.current = setTimeout(() => fetchKits(retry + 1), 4000);
                 } else {
                     setKitError('Inventory unavailable. Add items manually.');
                 }
@@ -389,50 +335,15 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
                 if (retry === 0) setLoadingKits(false);
             }
         };
-
-        fetchRooms();
         fetchKits();
-        return () => {
-            clearTimeout(retryTimeout.current.rooms);
-            clearTimeout(retryTimeout.current.kits);
-        };
+        return () => clearTimeout(kitRetry.current);
     }, []);
 
-    // Fetch day bookings when start time changes (for conflict preview)
     useEffect(() => {
-        const start = form.scheduledStart ? new Date(form.scheduledStart) : null;
-        if (!start || Number.isNaN(start.getTime())) { setDayBookings([]); return; }
-        const date = start.toISOString().slice(0, 10);
-        getBookings({ date }).then(r => setDayBookings(r.data || [])).catch(() => setDayBookings([]));
-    }, [form.scheduledStart]);
-
-    // Recompute available rooms when time or bookings change
-    useEffect(() => {
-        const available = getAvailableRooms();
-        const q = roomSearch.toLowerCase();
-        setRooms(available.filter(r =>
-            !q || r.roomNumber?.toLowerCase().includes(q) || r.roomType?.toLowerCase().includes(q)
-        ));
-        if (form.roomId) {
-            const ids = new Set(available.map(r => Number(r.id)));
-            if (!ids.has(Number(form.roomId))) setForm(f => ({ ...f, roomId: '', roomName: '' }));
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [form.scheduledStart, form.scheduledEnd, dayBookings, allRooms]);
-
-    const getAvailableRooms = () => {
-        const s = form.scheduledStart ? new Date(form.scheduledStart) : null;
-        const e = form.scheduledEnd ? new Date(form.scheduledEnd) : null;
-        if (!s || !e || Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return allRooms;
-        const active = dayBookings.filter(b => !['CANCELLED', 'COMPLETED'].includes(b.status));
-        return allRooms.filter(room =>
-            !active.some(b => {
-                if (Number(b.roomId) !== Number(room.id)) return false;
-                const bs = new Date(b.scheduledStart), be = new Date(b.scheduledEnd);
-                return !Number.isNaN(bs.getTime()) && overlapsWithBuffer(s, e, bs, be, 30);
-            })
-        );
-    };
+        const handler = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+    }, [onClose]);
 
     const searchPatients = async (q) => {
         if (q.length < 2) { setPatients([]); return; }
@@ -471,9 +382,8 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
         setSurgeonSearch(''); setShowSurgeonDrop(false); setSurgeons([]);
     };
 
-    const handleRoomSelect = (r) => {
-        setForm(f => ({ ...f, roomId: r.id, roomName: r.roomNumber || '' }));
-        setRoomSearch(''); setShowRoomDrop(false);
+    const handleRoomSelect = (room) => {
+        setForm(f => ({ ...f, roomId: room.id || 0, roomName: room.roomNumber || '' }));
     };
 
     const handleAddKit = (kit) => {
@@ -485,22 +395,20 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!form.patientId) { setError('Please select a patient'); return; }
-        if (!form.roomId) { setError('Please select a room'); return; }
+        if (!form.roomName) { setError('Please select an OT room'); return; }
         if (!form.surgeonId) { setError('Please select a surgeon'); return; }
 
-        setLoading(true);
+        setSubmitting(true);
         setError(null);
         try {
             const payload = {
                 ...form,
                 patientId: Number(form.patientId),
-                roomId: Number(form.roomId),
+                roomId: Number(form.roomId) || 0,
                 procedureCharge: form.procedureCharge ? Number(form.procedureCharge) : null,
             };
-
             const res = await createBooking(payload);
             const bookingId = res.data.id;
-
             for (const kit of selectedKits) {
                 await addConsumptionItem(bookingId, {
                     itemName: kit.name,
@@ -513,146 +421,144 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
             }
             onSuccess();
         } catch (err) {
-            setError(err.response?.data?.message || 'Failed to create booking');
+            setError(err.response?.data?.message || 'Failed to create booking. Please try again.');
         } finally {
-            setLoading(false);
+            setSubmitting(false);
         }
     };
 
     const filteredKits = allKits.filter(k =>
-        !kitSearch || k.name?.toLowerCase().includes(kitSearch.toLowerCase()) || k.code?.toLowerCase().includes(kitSearch.toLowerCase())
+        !kitSearch || k.name?.toLowerCase().includes(kitSearch.toLowerCase()) ||
+        k.code?.toLowerCase().includes(kitSearch.toLowerCase())
     );
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-                {/* Modal header */}
-                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-                    <h2 className="text-lg font-bold text-gray-900">New OT Booking</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+        <>
+            <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
+            <div className="fixed right-0 top-0 bottom-0 w-[540px] bg-white shadow-2xl z-50 flex flex-col">
+
+                <div className="px-6 py-5 border-b border-gray-100 flex-shrink-0">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900">New OT Booking</h2>
+                            <p className="text-sm text-gray-500 mt-0.5">Schedule a surgical case for the operating theatre</p>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1.5 transition-colors"
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
                 </div>
 
-                <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-5 space-y-5 flex-1">
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-7">
                     {error && (
-                        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                            <XCircle size={16} className="flex-shrink-0" />
+                        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                            <XCircle size={16} className="flex-shrink-0 mt-0.5" />
                             {error}
                         </div>
                     )}
 
-                    {/* Patient search */}
-                    <FormSection title="Patient">
-                        <SearchField
-                            placeholder="Search by name, MRN or phone..."
-                            value={patientSearch}
-                            onChange={v => { setPatientSearch(v); setShowPatientDrop(true); searchPatients(v); }}
-                            onFocus={() => setShowPatientDrop(true)}
-                            loading={searchingPatients}
-                        />
-                        {showPatientDrop && patients.length > 0 && (
-                            <Dropdown>
-                                {patients.map(p => (
-                                    <DropdownItem key={p.id} onClick={() => handlePatientSelect(p)}>
-                                        <span className="font-medium text-gray-900">
-                                            {p.name || `${p.firstName} ${p.lastName}`}
-                                        </span>
-                                        <span className="text-xs text-gray-500 mt-0.5">
-                                            MRN: {p.mrn} {p.age != null ? `· Age: ${p.age}` : ''}
-                                        </span>
-                                    </DropdownItem>
-                                ))}
-                            </Dropdown>
-                        )}
+                    {/* ── Patient ─────────────────────────────────────────── */}
+                    <DrawerSection title="Patient" required>
+                        <div className="relative">
+                            <SearchField
+                                placeholder="Search by name, MRN or phone…"
+                                value={patientSearch}
+                                onChange={v => { setPatientSearch(v); setShowPatientDrop(true); searchPatients(v); }}
+                                onFocus={() => setShowPatientDrop(true)}
+                                loading={searchingPatients}
+                            />
+                            {showPatientDrop && patients.length > 0 && (
+                                <Dropdown>
+                                    {patients.map(p => (
+                                        <DropdownItem key={p.id} onClick={() => handlePatientSelect(p)}>
+                                            <span className="font-medium text-gray-900">
+                                                {p.name || `${p.firstName} ${p.lastName}`}
+                                            </span>
+                                            <span className="text-xs text-gray-500">
+                                                MRN: {p.mrn}{p.age != null ? ` · Age: ${p.age}` : ''}
+                                            </span>
+                                        </DropdownItem>
+                                    ))}
+                                </Dropdown>
+                            )}
+                        </div>
                         {form.patientId && (
-                            <SelectedTag label={form.patientName} sub={`MRN: ${form.patientMrn}`} onClear={() => setForm(f => ({ ...f, patientId: '', patientName: '', patientMrn: '' }))} />
+                            <SelectedTag
+                                label={form.patientName}
+                                sub={`MRN: ${form.patientMrn}`}
+                                onClear={() => setForm(f => ({ ...f, patientId: '', patientName: '', patientMrn: '' }))}
+                            />
                         )}
-                    </FormSection>
+                    </DrawerSection>
 
-                    {/* Procedure */}
-                    <FormSection title="Procedure">
+                    {/* ── Procedure ───────────────────────────────────────── */}
+                    <DrawerSection title="Procedure" required>
                         <div className="grid grid-cols-2 gap-3">
                             <input
-                                className="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="col-span-2 border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="Procedure name *"
                                 value={form.procedureName}
                                 onChange={e => setForm(f => ({ ...f, procedureName: e.target.value.slice(0, 300) }))}
                                 required
                             />
                             <input
-                                className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="col-span-2 border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 type="number" step="0.01" min="0"
                                 placeholder="Procedure charge (₹)"
                                 value={form.procedureCharge}
                                 onChange={e => setForm(f => ({ ...f, procedureCharge: e.target.value }))}
                             />
                         </div>
-                    </FormSection>
+                    </DrawerSection>
 
-                    {/* Schedule */}
-                    <FormSection title="Schedule">
+                    {/* ── Schedule ────────────────────────────────────────── */}
+                    <DrawerSection title="Schedule" required>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">Start *</label>
+                                <label className="block text-xs font-medium text-gray-500 mb-1.5">Start time</label>
                                 <input
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     type="datetime-local"
                                     value={form.scheduledStart}
-                                    onChange={e => setForm(f => ({ ...f, scheduledStart: e.target.value }))}
+                                    onChange={e => setForm(f => ({
+                                        ...f, scheduledStart: e.target.value, roomId: '', roomName: '',
+                                    }))}
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">End *</label>
+                                <label className="block text-xs font-medium text-gray-500 mb-1.5">End time</label>
                                 <input
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     type="datetime-local"
                                     value={form.scheduledEnd}
-                                    onChange={e => setForm(f => ({ ...f, scheduledEnd: e.target.value }))}
+                                    onChange={e => setForm(f => ({
+                                        ...f, scheduledEnd: e.target.value, roomId: '', roomName: '',
+                                    }))}
                                     required
                                 />
                             </div>
                         </div>
-                    </FormSection>
+                    </DrawerSection>
 
-                    {/* Room */}
-                    <FormSection title="OT Room">
-                        {roomError && (
-                            <p className="text-xs text-amber-600 mb-1">{roomError}</p>
-                        )}
-                        <SearchField
-                            placeholder={roomError ? 'Enter room name manually...' : 'Search OT room...'}
-                            value={roomSearch}
-                            onChange={v => {
-                                setRoomSearch(v);
-                                if (!roomError) setShowRoomDrop(true);
-                                const q = v.toLowerCase();
-                                setRooms(getAvailableRooms().filter(r =>
-                                    !q || r.roomNumber?.toLowerCase().includes(q)
-                                ));
-                            }}
-                            onFocus={() => { if (!roomError) setShowRoomDrop(true); }}
-                            loading={loadingRooms}
+                    {/* ── OT Room ─────────────────────────────────────────── */}
+                    <DrawerSection title="OT Room" required>
+                        <RoomGrid
+                            start={form.scheduledStart}
+                            end={form.scheduledEnd}
+                            selectedRoomId={form.roomId}
+                            onSelect={handleRoomSelect}
                         />
-                        {!roomError && showRoomDrop && rooms.length > 0 && (
-                            <Dropdown>
-                                {rooms.map(r => (
-                                    <DropdownItem key={r.id} onClick={() => handleRoomSelect(r)}>
-                                        <span className="font-medium text-gray-900">{r.roomNumber}</span>
-                                        <span className="text-xs text-gray-500">{r.roomType}</span>
-                                    </DropdownItem>
-                                ))}
-                            </Dropdown>
-                        )}
-                        {form.roomId && (
-                            <SelectedTag label={form.roomName} sub="OT Room" onClear={() => setForm(f => ({ ...f, roomId: '', roomName: '' }))} />
-                        )}
-                    </FormSection>
+                    </DrawerSection>
 
-                    {/* Surgeon */}
-                    <FormSection title="Surgeon">
-                        <div className="mb-2">
+                    {/* ── Surgeon ─────────────────────────────────────────── */}
+                    <DrawerSection title="Surgeon" required>
+                        <div className="space-y-2.5">
                             <select
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                                 value={specialization}
                                 onChange={e => { setSpecialization(e.target.value); setSurgeons([]); setSurgeonSearch(''); }}
                             >
@@ -666,133 +572,359 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
                                 <option>Urology</option>
                                 <option>Oncology</option>
                             </select>
+                            <div className="relative">
+                                <SearchField
+                                    placeholder="Search by surgeon name…"
+                                    value={surgeonSearch}
+                                    onChange={v => { setSurgeonSearch(v); setShowSurgeonDrop(true); searchSurgeons(v); }}
+                                    onFocus={() => setShowSurgeonDrop(true)}
+                                    loading={searchingSurgeons}
+                                />
+                                {showSurgeonDrop && surgeons.length > 0 && (
+                                    <Dropdown>
+                                        {surgeons.map(s => (
+                                            <DropdownItem key={s.id || s.userId} onClick={() => handleSurgeonSelect(s)}>
+                                                <span className="font-medium text-gray-900">
+                                                    {s.name || `${s.firstName} ${s.lastName}`}
+                                                </span>
+                                                <span className="text-xs text-gray-500">
+                                                    {s.specialization && <span className="text-blue-600 mr-2">{s.specialization}</span>}
+                                                    {s.email}
+                                                </span>
+                                            </DropdownItem>
+                                        ))}
+                                    </Dropdown>
+                                )}
+                            </div>
+                            {form.surgeonId && (
+                                <SelectedTag
+                                    label={form.surgeonName}
+                                    sub="Surgeon"
+                                    onClear={() => setForm(f => ({ ...f, surgeonId: '', surgeonName: '' }))}
+                                />
+                            )}
                         </div>
-                        <SearchField
-                            placeholder="Search by surgeon name..."
-                            value={surgeonSearch}
-                            onChange={v => { setSurgeonSearch(v); setShowSurgeonDrop(true); searchSurgeons(v); }}
-                            onFocus={() => setShowSurgeonDrop(true)}
-                            loading={searchingSurgeons}
-                        />
-                        {showSurgeonDrop && surgeons.length > 0 && (
-                            <Dropdown>
-                                {surgeons.map(s => (
-                                    <DropdownItem key={s.id || s.userId} onClick={() => handleSurgeonSelect(s)}>
-                                        <span className="font-medium text-gray-900">
-                                            {s.name || `${s.firstName} ${s.lastName}`}
-                                        </span>
-                                        <span className="text-xs text-gray-500">
-                                            {s.specialization && <span className="text-blue-600 mr-1">{s.specialization}</span>}
-                                            {s.email}
-                                        </span>
-                                    </DropdownItem>
-                                ))}
-                            </Dropdown>
-                        )}
-                        {form.surgeonId && (
-                            <SelectedTag label={form.surgeonName} sub="Surgeon" onClear={() => setForm(f => ({ ...f, surgeonId: '', surgeonName: '' }))} />
-                        )}
-                    </FormSection>
+                    </DrawerSection>
 
-                    {/* Inventory Kits */}
-                    <FormSection title="Inventory Kits">
+                    {/* ── Inventory Kits ──────────────────────────────────── */}
+                    <DrawerSection title="Inventory Kits">
                         {kitError && (
-                            <p className="text-xs text-amber-600 mb-1">{kitError}</p>
+                            <p className="text-xs text-amber-600 mb-2">{kitError}</p>
                         )}
-                        <SearchField
-                            placeholder={kitError ? 'Enter kit name...' : 'Search kit...'}
-                            value={kitSearch}
-                            onChange={v => { setKitSearch(v); if (!kitError) setShowKitDrop(true); }}
-                            onFocus={() => { if (!kitError) setShowKitDrop(true); }}
-                            loading={loadingKits}
-                        />
-                        {!kitError && showKitDrop && filteredKits.length > 0 && (
-                            <Dropdown>
-                                {filteredKits.map(k => (
-                                    <DropdownItem key={k.id} onClick={() => handleAddKit(k)}>
-                                        <span className="font-medium text-gray-900">{k.name}</span>
-                                        {k.code && <span className="text-xs text-gray-500">Code: {k.code}</span>}
-                                    </DropdownItem>
-                                ))}
-                            </Dropdown>
-                        )}
+                        <div className="relative">
+                            <SearchField
+                                placeholder={kitError ? 'Enter kit name…' : 'Search kits by name or code…'}
+                                value={kitSearch}
+                                onChange={v => { setKitSearch(v); if (!kitError) setShowKitDrop(true); }}
+                                onFocus={() => { if (!kitError) setShowKitDrop(true); }}
+                                loading={loadingKits}
+                            />
+                            {!kitError && showKitDrop && filteredKits.length > 0 && (
+                                <Dropdown>
+                                    {filteredKits.map(k => (
+                                        <DropdownItem key={k.id} onClick={() => handleAddKit(k)}>
+                                            <span className="font-medium text-gray-900">{k.name}</span>
+                                            {k.code && <span className="text-xs text-gray-500">Code: {k.code}</span>}
+                                        </DropdownItem>
+                                    ))}
+                                </Dropdown>
+                            )}
+                        </div>
                         {kitError && kitSearch && (
                             <button
                                 type="button"
                                 onClick={() => handleAddKit({ id: `manual_${Date.now()}`, name: kitSearch, price: 0 })}
-                                className="mt-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
                             >
-                                + Add "{kitSearch}" as custom item
+                                + Add &ldquo;{kitSearch}&rdquo; as custom item
                             </button>
                         )}
                         {selectedKits.length > 0 && (
                             <div className="mt-3 space-y-2">
                                 {selectedKits.map(kit => (
-                                    <div key={kit.id} className="flex items-center gap-2 bg-gray-50 rounded-lg p-2 border border-gray-200">
+                                    <div key={kit.id} className="flex items-center gap-2 bg-gray-50 rounded-xl p-3 border border-gray-200">
                                         <span className="flex-1 text-sm font-medium text-gray-900 truncate">{kit.name}</span>
-                                        <input
-                                            type="number" min="1" value={kit.quantity}
-                                            onChange={e => setSelectedKits(kits => kits.map(k => k.id === kit.id ? { ...k, quantity: Math.max(1, Number(e.target.value)) } : k))}
-                                            className="w-14 border border-gray-300 rounded px-2 py-1 text-xs text-center"
-                                        />
-                                        <span className="text-xs text-gray-500">qty</span>
-                                        <input
-                                            type="number" step="0.01" min="0" value={kit.unitPrice}
-                                            onChange={e => setSelectedKits(kits => kits.map(k => k.id === kit.id ? { ...k, unitPrice: Math.max(0, Number(e.target.value)) } : k))}
-                                            className="w-20 border border-gray-300 rounded px-2 py-1 text-xs text-center"
-                                        />
-                                        <span className="text-xs text-gray-500">₹</span>
+                                        <div className="flex items-center gap-1">
+                                            <input
+                                                type="number" min="1" value={kit.quantity}
+                                                onChange={e => setSelectedKits(kits => kits.map(k => k.id === kit.id
+                                                    ? { ...k, quantity: Math.max(1, Number(e.target.value)) } : k))}
+                                                className="w-14 border border-gray-300 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            />
+                                            <span className="text-xs text-gray-500">qty</span>
+                                            <input
+                                                type="number" step="0.01" min="0" value={kit.unitPrice}
+                                                onChange={e => setSelectedKits(kits => kits.map(k => k.id === kit.id
+                                                    ? { ...k, unitPrice: Math.max(0, Number(e.target.value)) } : k))}
+                                                className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            />
+                                            <span className="text-xs text-gray-500">₹</span>
+                                        </div>
                                         <button type="button" onClick={() => setSelectedKits(kits => kits.filter(k => k.id !== kit.id))}>
-                                            <Trash2 size={14} className="text-red-500 hover:text-red-700" />
+                                            <Trash2 size={14} className="text-red-400 hover:text-red-600" />
                                         </button>
                                     </div>
                                 ))}
                             </div>
                         )}
-                    </FormSection>
+                    </DrawerSection>
 
-                    {/* Notes */}
-                    <FormSection title="Notes">
+                    {/* ── Notes ───────────────────────────────────────────── */}
+                    <DrawerSection title="Notes">
                         <textarea
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                            rows={2}
-                            placeholder="Clinical notes, special requirements..."
+                            className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                            rows={3}
+                            placeholder="Clinical notes, allergies, special requirements…"
                             value={form.notes}
                             onChange={e => setForm(f => ({ ...f, notes: e.target.value.slice(0, 1000) }))}
                         />
-                    </FormSection>
-                </form>
+                    </DrawerSection>
+                </div>
 
-                {/* Modal footer */}
-                <div className="px-6 py-4 border-t border-gray-100 flex gap-3 flex-shrink-0">
+                <div className="px-6 py-4 border-t border-gray-100 flex gap-3 flex-shrink-0 bg-white">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex-1 border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 rounded-lg transition-colors text-sm"
+                        className="flex-1 border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-xl transition-colors text-sm"
                     >
                         Cancel
                     </button>
                     <button
-                        type="submit"
-                        form="booking-form"
-                        disabled={loading}
+                        type="button"
+                        disabled={submitting}
                         onClick={handleSubmit}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 rounded-lg transition-colors text-sm"
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm shadow-sm"
                     >
-                        {loading ? 'Creating...' : 'Create Booking'}
+                        {submitting ? 'Creating…' : 'Create Booking'}
                     </button>
                 </div>
             </div>
+        </>
+    );
+}
+
+// ─── Room Availability Grid ────────────────────────────────────────────────────
+
+function RoomGrid({ start, end, selectedRoomId, onSelect }) {
+    const [rooms, setRooms] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [hmsDown, setHmsDown] = useState(false);
+    const [manualInput, setManualInput] = useState('');
+
+    useEffect(() => {
+        if (!start || !end) { setRooms(null); setHmsDown(false); return; }
+        let active = true;
+        setLoading(true);
+        setHmsDown(false);
+        getAvailableRooms(start, end, null)
+            .then(res => { if (active) setRooms(Array.isArray(res.data) ? res.data : []); })
+            .catch(() => { if (active) setHmsDown(true); })
+            .finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
+    }, [start, end]);
+
+    if (!start || !end) {
+        return (
+            <div className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50">
+                <Calendar size={20} className="text-gray-300" />
+                <p className="text-sm text-gray-400 text-center">
+                    Set a start and end time above to see room availability
+                </p>
+            </div>
+        );
+    }
+
+    if (loading) {
+        return (
+            <div className="grid grid-cols-3 gap-2">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />
+                ))}
+            </div>
+        );
+    }
+
+    if (hmsDown) {
+        return (
+            <div className="space-y-3">
+                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                    <AlertCircle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-700">
+                        Room availability is unavailable. Enter a room name manually.
+                    </p>
+                </div>
+                <input
+                    type="text"
+                    placeholder="e.g. OT-3, Theatre B…"
+                    value={manualInput}
+                    onChange={e => setManualInput(e.target.value)}
+                    onBlur={() => {
+                        if (manualInput.trim()) onSelect({ id: 0, roomNumber: manualInput.trim(), available: true });
+                    }}
+                    onKeyDown={e => {
+                        if (e.key === 'Enter' && manualInput.trim()) {
+                            onSelect({ id: 0, roomNumber: manualInput.trim(), available: true });
+                        }
+                    }}
+                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+            </div>
+        );
+    }
+
+    if (!rooms || rooms.length === 0) {
+        return (
+            <div className="py-8 text-center text-sm text-gray-400 rounded-xl bg-gray-50 border border-gray-200">
+                No OT rooms configured in HMS
+            </div>
+        );
+    }
+
+    const available = rooms.filter(r => r.available);
+    const occupied = rooms.filter(r => !r.available);
+
+    return (
+        <div className="space-y-4">
+            {available.length === 0 && (
+                <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-center">
+                    <Lock size={16} className="mx-auto text-red-400 mb-1.5" />
+                    <p className="text-sm font-semibold text-red-700">No rooms available for this time slot</p>
+                    <p className="text-xs text-red-500 mt-0.5">All rooms are occupied or booked. Try a different time.</p>
+                </div>
+            )}
+
+            {available.length > 0 && (
+                <div>
+                    <div className="flex items-center gap-2 mb-2.5">
+                        <span className="w-2 h-2 rounded-full bg-green-500" />
+                        <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">
+                            Available — {available.length} room{available.length > 1 ? 's' : ''}
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                        {available.map(room => (
+                            <RoomCard
+                                key={room.id}
+                                room={room}
+                                selected={String(room.id) === String(selectedRoomId)}
+                                onSelect={() => onSelect(room)}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {occupied.length > 0 && (
+                <div>
+                    <div className="flex items-center gap-2 mb-2.5">
+                        <span className="w-2 h-2 rounded-full bg-gray-400" />
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            Unavailable — {occupied.length} room{occupied.length > 1 ? 's' : ''}
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                        {occupied.map(room => (
+                            <RoomCard key={room.id} room={room} selected={false} onSelect={() => {}} />
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
 
-// ─── Shared small components ──────────────────────────────────────────────────
+function RoomCard({ room, selected, onSelect }) {
+    const isInProgress = room.occupiedStatus === 'IN_PROGRESS';
+    const isSanitation = room.occupiedStatus === 'PENDING_SANITATION';
+    const roomLabel = room.roomNumber || room.roomName || `OT-${room.id}`;
 
-function FormSection({ title, children }) {
+    const freeLabel = (() => {
+        if (!room.freeAt) return null;
+        if (room.freeAt === 'After sanitation') return 'After sanitation';
+        try {
+            return `Free at ${new Date(room.freeAt).toLocaleTimeString('en-IN', {
+                hour: '2-digit', minute: '2-digit', hour12: true,
+            })}`;
+        } catch { return null; }
+    })();
+
+    if (room.available) {
+        return (
+            <button
+                type="button"
+                onClick={onSelect}
+                className={[
+                    'relative w-full rounded-xl border-2 p-3 text-left transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1',
+                    selected
+                        ? 'border-green-500 bg-green-500 shadow-md'
+                        : 'border-green-200 bg-green-50 hover:border-green-400 hover:bg-green-100 hover:shadow-sm',
+                ].join(' ')}
+            >
+                <p className={`text-sm font-bold truncate ${selected ? 'text-white' : 'text-gray-900'}`}>
+                    {roomLabel}
+                </p>
+                {room.floor && (
+                    <p className={`text-xs mt-0.5 ${selected ? 'text-green-100' : 'text-gray-500'}`}>
+                        {room.floor}
+                    </p>
+                )}
+                <div className="mt-2 flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${selected ? 'bg-white' : 'bg-green-500'}`} />
+                    <span className={`text-xs font-semibold ${selected ? 'text-green-100' : 'text-green-700'}`}>
+                        {selected ? 'Selected' : 'Free'}
+                    </span>
+                    {selected && <CheckCircle2 size={12} className="ml-auto text-white" />}
+                </div>
+            </button>
+        );
+    }
+
+    const cardCls = isInProgress
+        ? 'border-red-100 bg-red-50/70'
+        : isSanitation
+            ? 'border-amber-100 bg-amber-50/70'
+            : 'border-blue-100 bg-blue-50/70';
+
+    const badgeCls = isInProgress
+        ? 'bg-red-100 text-red-700'
+        : isSanitation
+            ? 'bg-amber-100 text-amber-700'
+            : 'bg-blue-100 text-blue-700';
+
+    const dotCls = isInProgress
+        ? 'bg-red-500 animate-pulse'
+        : isSanitation
+            ? 'bg-amber-500'
+            : 'bg-blue-500';
+
+    const statusLabel = isInProgress ? 'In Progress' : isSanitation ? 'Cleaning' : 'Booked';
+
+    return (
+        <div className={`rounded-xl border-2 p-3 cursor-not-allowed select-none ${cardCls}`}>
+            <p className="text-sm font-bold text-gray-600 truncate">{roomLabel}</p>
+            <div className={`mt-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-semibold ${badgeCls}`}>
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotCls}`} />
+                {statusLabel}
+            </div>
+            {room.occupiedBy && (
+                <p className="text-xs text-gray-500 mt-1.5 truncate leading-snug">{room.occupiedBy}</p>
+            )}
+            {freeLabel && (
+                <p className="text-xs text-gray-400 mt-0.5">{freeLabel}</p>
+            )}
+        </div>
+    );
+}
+
+// ─── Shared form primitives ────────────────────────────────────────────────────
+
+function DrawerSection({ title, required, children }) {
     return (
         <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{title}</h3>
+            <div className="flex items-center gap-1 mb-2.5">
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{title}</h3>
+                {required && <span className="text-red-400 text-xs">*</span>}
+            </div>
             <div className="relative">{children}</div>
         </div>
     );
@@ -801,18 +933,18 @@ function FormSection({ title, children }) {
 function SearchField({ placeholder, value, onChange, onFocus, loading }) {
     return (
         <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input
                 type="text"
                 placeholder={placeholder}
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 onFocus={onFocus}
-                className="w-full border border-gray-300 rounded-lg pl-9 pr-9 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-xl pl-9 pr-9 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             {loading && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent" />
+                <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                    <Loader2 size={14} className="animate-spin text-blue-500" />
                 </div>
             )}
         </div>
@@ -821,7 +953,7 @@ function SearchField({ placeholder, value, onChange, onFocus, loading }) {
 
 function Dropdown({ children }) {
     return (
-        <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+        <div className="absolute top-full mt-1.5 w-full bg-white border border-gray-200 rounded-xl shadow-xl z-20 max-h-52 overflow-y-auto">
             {children}
         </div>
     );
@@ -832,7 +964,7 @@ function DropdownItem({ onClick, children }) {
         <button
             type="button"
             onClick={onClick}
-            className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 flex flex-col gap-0.5"
+            className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-gray-50 last:border-b-0 flex flex-col gap-0.5 transition-colors"
         >
             {children}
         </button>
@@ -841,12 +973,18 @@ function DropdownItem({ onClick, children }) {
 
 function SelectedTag({ label, sub, onClear }) {
     return (
-        <div className="mt-2 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+        <div className="mt-2.5 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-3.5 py-2.5">
             <div>
-                <p className="text-sm font-semibold text-blue-900">{label}</p>
-                {sub && <p className="text-xs text-blue-600">{sub}</p>}
+                <p className="text-sm font-semibold text-blue-900 leading-tight">{label}</p>
+                {sub && <p className="text-xs text-blue-500 mt-0.5">{sub}</p>}
             </div>
-            <button type="button" onClick={onClear} className="text-blue-400 hover:text-blue-700 text-lg leading-none ml-3">✕</button>
+            <button
+                type="button"
+                onClick={onClear}
+                className="text-blue-300 hover:text-blue-600 ml-3 transition-colors"
+            >
+                <X size={14} />
+            </button>
         </div>
     );
 }

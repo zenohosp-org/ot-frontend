@@ -72,6 +72,8 @@ export const deleteConsumptionItem = (itemId) => api.delete(`/api/ot/bookings/co
 
 // ─── HMS Proxy ────────────────────────────────────────────────────────────────
 export const getHmsRooms = () => api.get('/api/proxy/hms/rooms');
+export const getAvailableRooms = (start, end, excludeBookingId) =>
+    api.get('/api/proxy/hms/rooms/available', { params: { start, end, excludeBookingId } });
 
 // All active admissions in the hospital (any room type) — for OT booking eligibility
 export const getActiveAdmissions = () => api.get('/api/proxy/hms/admissions');
