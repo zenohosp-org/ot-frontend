@@ -1,56 +1,33 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
-import { LogOut, BarChart3, Grid3x3, BookOpen } from 'lucide-react';
+import { LogOut, BarChart3, Monitor, BookOpen, Calendar } from 'lucide-react';
 
 export default function Layout() {
     const { logout } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
-    const isActive = (path) => location.pathname === path;
-
-    const handleLogout = async () => {
-        await logout();
-    };
+    const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
 
     return (
         <div className="flex h-screen bg-gray-50">
-            <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-                <div className="p-6 border-b border-gray-200">
-                    <h1 className="text-xl font-bold text-black">OT Manager</h1>
-                    <p className="text-sm text-black mt-1">Operating Theater</p>
+            <aside className="w-60 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+                <div className="px-5 py-5 border-b border-gray-100">
+                    <h1 className="text-lg font-bold text-gray-900">OT Manager</h1>
+                    <p className="text-xs text-gray-400 mt-0.5">Operating Theater</p>
                 </div>
 
-                <nav className="flex-1 p-4 space-y-2">
-                    <NavItem
-                        icon={<BarChart3 size={20} />}
-                        label="Dashboard"
-                        href="/dashboard"
-                        active={isActive('/dashboard')}
-                        onClick={() => navigate('/dashboard')}
-                    />
-                    <NavItem
-                        icon={<Grid3x3 size={20} />}
-                        label="Schedules"
-                        href="/schedules"
-                        active={isActive('/schedules')}
-                        onClick={() => navigate('/schedules')}
-                    />
-                    <NavItem
-                        icon={<BookOpen size={20} />}
-                        label="Cases"
-                        href="/cases"
-                        active={isActive('/cases')}
-                        onClick={() => navigate('/cases')}
-                    />
+                <nav className="flex-1 p-3 space-y-1">
+                    <NavItem icon={<BarChart3 size={18} />} label="Dashboard"  onClick={() => navigate('/dashboard')}  active={isActive('/dashboard')} />
+                    <NavItem icon={<Monitor size={18} />}   label="Live Board"  onClick={() => navigate('/ot-board')}    active={isActive('/ot-board')} highlight />
+                    <NavItem icon={<Calendar size={18} />}  label="Schedules"   onClick={() => navigate('/schedules')}   active={isActive('/schedules')} />
+                    <NavItem icon={<BookOpen size={18} />}  label="Cases"       onClick={() => navigate('/cases')}       active={isActive('/cases')} />
                 </nav>
 
-                <div className="p-4 border-t border-gray-200">
-                    <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-black font-medium hover:bg-red-50 hover:text-red-700 rounded-lg transition"
-                    >
-                        <LogOut size={20} />
+                <div className="p-3 border-t border-gray-100">
+                    <button onClick={logout}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-500 font-medium hover:bg-red-50 hover:text-red-600 rounded-lg transition">
+                        <LogOut size={16} />
                         <span>Logout</span>
                     </button>
                 </div>
@@ -63,18 +40,21 @@ export default function Layout() {
     );
 }
 
-function NavItem({ icon, label, active, onClick }) {
+function NavItem({ icon, label, active, onClick, highlight }) {
     return (
-        <button
-            onClick={onClick}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition font-medium ${
-                active
+        <button onClick={onClick}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition text-sm font-medium
+                ${active
                     ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-black hover:bg-gray-100'
-            }`}
-        >
+                    : highlight
+                        ? 'text-blue-600 hover:bg-blue-50'
+                        : 'text-gray-600 hover:bg-gray-100'
+                }`}>
             {icon}
             <span>{label}</span>
+            {highlight && !active && (
+                <span className="ml-auto w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+            )}
         </button>
     );
 }

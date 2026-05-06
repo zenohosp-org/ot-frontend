@@ -1,18 +1,48 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-    getBooking,
-    getConsumption,
-    confirmBooking,
-    startBooking,
-    endBooking,
-    sanitizeBooking,
-    cancelBooking,
-    addConsumptionItem,
-    deleteConsumptionItem,
-    getInventoryKits,
+    getBooking, getConsumption,
+    confirmBooking, startBooking, endBooking, sanitizeBooking, cancelBooking,
+    addConsumptionItem, deleteConsumptionItem, getInventoryKits,
 } from '../api/client';
-import { Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, Clock, Activity, IndianRupee, AlertTriangle, CheckCircle2 } from 'lucide-react';
+
+const STEPS = [
+    { key: 'REQUESTED',         label: 'Requested'   },
+    { key: 'CONFIRMED',         label: 'Confirmed'   },
+    { key: 'IN_PROGRESS',       label: 'In Progress' },
+    { key: 'PENDING_SANITATION',label: 'Sanitation'  },
+    { key: 'COMPLETED',         label: 'Completed'   },
+];
+
+const STATUS_STYLE = {
+    REQUESTED:          'bg-gray-100 text-gray-700 border border-gray-300',
+    CONFIRMED:          'bg-blue-100 text-blue-800 border border-blue-300',
+    IN_PROGRESS:        'bg-red-100 text-red-800 border border-red-300',
+    PENDING_SANITATION: 'bg-amber-100 text-amber-800 border border-amber-300',
+    COMPLETED:          'bg-green-100 text-green-800 border border-green-300',
+    CANCELLED:          'bg-rose-100 text-rose-800 border border-rose-300',
+};
+
+function fmt(ms) {
+    if (ms <= 0) return '0m';
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${String(sec).padStart(2, '0')}s`;
+    return `${sec}s`;
+}
+
+function fmtDt(dt) {
+    return new Date(dt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtRupees(n) {
+    if (!n && n !== 0) return '—';
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n);
+}
 
 export default function BookingDetail() {
     const { id } = useParams();
@@ -20,252 +50,389 @@ export default function BookingDetail() {
     const [booking, setBooking] = useState(null);
     const [consumption, setConsumption] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [showAddConsumption, setShowAddConsumption] = useState(false);
+    const [showAdd, setShowAdd] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
     const [actionError, setActionError] = useState(null);
+    const [now, setNow] = useState(new Date());
+    const [confirmCancel, setConfirmCancel] = useState(false);
 
     useEffect(() => {
-        fetchBooking();
-    }, [id]);
+        const tick = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(tick);
+    }, []);
 
-    const fetchBooking = async () => {
+    const fetchAll = useCallback(async () => {
         try {
-            const bookingRes = await getBooking(id);
-            setBooking(bookingRes.data);
-
-            const consumptionRes = await getConsumption(id);
-            setConsumption(consumptionRes.data || []);
-        } catch (error) {
-            console.error('Error fetching booking:', error);
+            const [bRes, cRes] = await Promise.all([getBooking(id), getConsumption(id)]);
+            setBooking(bRes.data);
+            setConsumption(cRes.data || []);
+        } catch {
+            // handled below
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
 
-    const handleStatusChange = async (action) => {
+    useEffect(() => { fetchAll(); }, [fetchAll]);
+
+    const act = async (action) => {
         setActionLoading(true);
         setActionError(null);
         try {
-            let result;
-            if (action === 'confirm') result = await confirmBooking(id);
-            else if (action === 'start') result = await startBooking(id);
-            else if (action === 'end') result = await endBooking(id);
-            else if (action === 'sanitize') result = await sanitizeBooking(id);
-            else if (action === 'cancel') result = await cancelBooking(id);
-
-            setBooking(result.data);
-        } catch (error) {
-            setActionError(error.response?.data?.message || error.message || 'An error occurred');
+            const fns = { confirm: confirmBooking, start: startBooking, end: endBooking, sanitize: sanitizeBooking, cancel: cancelBooking };
+            const res = await fns[action](id);
+            setBooking(res.data);
+        } catch (e) {
+            setActionError(e.response?.data?.message || e.message || 'Action failed');
         } finally {
             setActionLoading(false);
         }
     };
 
-    const handleDeleteConsumption = async (itemId) => {
+    const handleDelete = async (itemId) => {
         try {
             await deleteConsumptionItem(itemId);
-            setConsumption(consumption.filter(c => c.id !== itemId));
-        } catch (error) {
-            setActionError('Error deleting item: ' + (error.response?.data?.message || error.message));
+            setConsumption(c => c.filter(x => x.id !== itemId));
+        } catch (e) {
+            setActionError('Could not delete item: ' + (e.response?.data?.message || e.message));
         }
     };
 
-    if (loading) return <div className="p-8 text-black">Loading...</div>;
-    if (!booking) return <div className="p-8 text-black">Booking not found</div>;
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-50">
+                <div className="flex items-center gap-3 text-gray-500">
+                    <Activity size={20} className="animate-spin" />
+                    <span>Loading case…</span>
+                </div>
+            </div>
+        );
+    }
 
-    const canConfirm = booking.status === 'REQUESTED';
-    const canStart = booking.status === 'CONFIRMED';
-    const canEnd = booking.status === 'IN_PROGRESS';
-    const canSanitize = booking.status === 'PENDING_SANITATION';
-    const canCancel = ['REQUESTED', 'CONFIRMED', 'IN_PROGRESS'].includes(booking.status);
+    if (!booking) {
+        return (
+            <div className="p-8 text-gray-500">Booking not found.
+                <button onClick={() => navigate('/cases')} className="ml-2 text-blue-600 underline">Back to Cases</button>
+            </div>
+        );
+    }
+
+    const isCancelled = booking.status === 'CANCELLED';
+    const stepIdx = STEPS.findIndex(s => s.key === booking.status);
+
+    const isLive = booking.status === 'IN_PROGRESS';
+    const elapsed = isLive ? now - new Date(booking.actualStart) : null;
+    const scheduledDuration = new Date(booking.scheduledEnd) - new Date(booking.scheduledStart);
+    const overtime = isLive && now > new Date(booking.scheduledEnd);
+    const pct = isLive ? Math.min(100, ((now - new Date(booking.actualStart)) / scheduledDuration) * 100) : null;
+
+    const billable = consumption.filter(c => c.billable);
+    const consumptionTotal = billable.reduce((sum, c) => sum + (c.quantity * c.unitPrice), 0);
+    const procedureCharge = booking.procedureCharge || 0;
+    const estimatedTotal = procedureCharge + consumptionTotal;
 
     return (
-        <div className="p-8">
-            <button onClick={() => navigate('/cases')} className="text-blue-600 hover:text-blue-800 mb-4">
-                ← Back to Cases
-            </button>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2">
-                    <div className="bg-white rounded-lg shadow p-6 mb-6">
-                        <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h1 className="text-3xl font-bold mb-2 text-black">{booking.procedureName}</h1>
-                                <p className="text-black">Room: {booking.roomName} | Surgeon: {booking.surgeonName}</p>
-                            </div>
-                            <div className={`px-4 py-2 rounded font-semibold ${getStatusColor(booking.status)}`}>
-                                {booking.status}
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <p className="text-black text-sm">Patient</p>
-                                <p className="font-semibold text-black">{booking.patientName}</p>
-                                <p className="text-black text-sm">MRN: {booking.patientMrn}</p>
-                            </div>
-                            <div>
-                                <p className="text-black text-sm">Scheduled Start</p>
-                                <p className="font-semibold text-black">{new Date(booking.scheduledStart).toLocaleString()}</p>
-                            </div>
-                            <div>
-                                <p className="text-black text-sm">Scheduled End</p>
-                                <p className="font-semibold text-black">{new Date(booking.scheduledEnd).toLocaleString()}</p>
-                            </div>
-                            {booking.actualStart && (
-                                <div>
-                                    <p className="text-black text-sm">Actual Start</p>
-                                    <p className="font-semibold text-black">{new Date(booking.actualStart).toLocaleString()}</p>
-                                </div>
-                            )}
-                            {booking.actualEnd && (
-                                <div>
-                                    <p className="text-black text-sm">Actual End</p>
-                                    <p className="font-semibold text-black">{new Date(booking.actualEnd).toLocaleString()}</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {booking.notes && (
-                            <div className="mt-4 p-3 bg-gray-50 rounded">
-                                <p className="text-black text-sm">Notes</p>
-                                <p className="text-black">{booking.notes}</p>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="bg-white rounded-lg shadow p-6">
-                        <h2 className="text-xl font-bold mb-4 text-black">Consumption Items</h2>
-
-                        <div className="space-y-3 mb-6">
-                            {consumption.length === 0 ? (
-                                <p className="text-black">No consumption items added</p>
-                            ) : (
-                                consumption.map(item => (
-                                    <div key={item.id} className="flex justify-between items-center p-3 border rounded hover:bg-gray-50">
-                                        <div className="flex-1">
-                                            <p className="font-semibold text-black">{item.itemName}</p>
-                                            <p className="text-black text-sm">
-                                                {item.itemType} • Qty: {item.quantity} • ₹{item.unitPrice.toFixed(2)} each
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => handleDeleteConsumption(item.id)}
-                                            className="text-red-600 hover:text-red-800 ml-4"
-                                        >
-                                            <Trash2 size={20} />
-                                        </button>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-
-                        <button
-                            onClick={() => setShowAddConsumption(true)}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition"
-                        >
-                            Add Consumption Item
+        <div className="min-h-screen bg-gray-50">
+            {/* ── Top Bar ── */}
+            <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                <button onClick={() => navigate('/cases')} className="flex items-center gap-2 text-gray-500 hover:text-gray-800 transition font-medium text-sm">
+                    <ArrowLeft size={16} />
+                    Back to Cases
+                </button>
+                <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${STATUS_STYLE[booking.status] || STATUS_STYLE.REQUESTED}`}>
+                        {booking.status.replace('_', ' ')}
+                    </span>
+                    {!isCancelled && ['REQUESTED', 'CONFIRMED', 'IN_PROGRESS'].includes(booking.status) && (
+                        <button onClick={() => setConfirmCancel(true)}
+                            className="text-xs text-rose-600 hover:text-rose-800 border border-rose-200 hover:border-rose-400 px-3 py-1 rounded-lg transition font-medium">
+                            Cancel Case
                         </button>
-
-                        {showAddConsumption && (
-                            <AddConsumptionModal
-                                bookingId={id}
-                                onClose={() => setShowAddConsumption(false)}
-                                onSuccess={() => {
-                                    setShowAddConsumption(false);
-                                    fetchBooking();
-                                }}
-                            />
-                        )}
-                    </div>
+                    )}
                 </div>
+            </div>
 
-                <div>
-                    <div className="bg-white rounded-lg shadow p-6 sticky top-8">
-                        <h3 className="text-lg font-bold mb-4 text-black">Actions</h3>
+            <div className="p-6 max-w-6xl mx-auto">
+                {/* ── Workflow Steps ── */}
+                {!isCancelled && (
+                    <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-6">
+                        <div className="flex items-center">
+                            {STEPS.map((step, i) => {
+                                const done = i < stepIdx;
+                                const active = i === stepIdx;
+                                return (
+                                    <div key={step.key} className="flex items-center flex-1 last:flex-none">
+                                        <div className="flex flex-col items-center">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition
+                                                ${done ? 'bg-green-500 border-green-500 text-white' : active ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-400'}`}>
+                                                {done ? <CheckCircle2 size={16} /> : i + 1}
+                                            </div>
+                                            <span className={`text-xs mt-1 font-medium ${active ? 'text-blue-600' : done ? 'text-green-600' : 'text-gray-400'}`}>
+                                                {step.label}
+                                            </span>
+                                        </div>
+                                        {i < STEPS.length - 1 && (
+                                            <div className={`flex-1 h-0.5 mx-1 mb-4 ${done ? 'bg-green-400' : 'bg-gray-200'}`} />
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
-                        {actionError && (
-                            <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded text-sm mb-4">
-                                {actionError}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* ── Main Content ── */}
+                    <div className="lg:col-span-2 space-y-5">
+
+                        {/* Live Surgery Timer */}
+                        {isLive && (
+                            <div className={`rounded-2xl border-2 p-5 ${overtime ? 'border-red-400 bg-red-50' : 'border-green-400 bg-green-50'}`}>
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                                        <span className={`font-bold text-sm uppercase tracking-wide ${overtime ? 'text-red-700' : 'text-green-700'}`}>Surgery Live</span>
+                                    </div>
+                                    {overtime
+                                        ? <span className="text-sm font-bold text-red-600">+{fmt(-( new Date(booking.scheduledEnd) - now))} Overtime</span>
+                                        : <span className="text-sm font-medium text-green-700">{fmt(new Date(booking.scheduledEnd) - now)} remaining</span>
+                                    }
+                                </div>
+                                <div className="flex items-end gap-3">
+                                    <p className={`text-4xl font-bold tabular-nums ${overtime ? 'text-red-700' : 'text-green-700'}`}>{fmt(elapsed)}</p>
+                                    <p className="text-sm text-gray-500 mb-1">elapsed since {new Date(booking.actualStart).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
+                                </div>
+                                <div className="mt-3 w-full bg-white bg-opacity-60 rounded-full h-2">
+                                    <div className={`h-2 rounded-full transition-all duration-1000 ${overtime ? 'bg-red-500' : 'bg-green-500'}`}
+                                        style={{ width: `${pct}%` }} />
+                                </div>
                             </div>
                         )}
 
-                        <div className="space-y-3">
-                            {canConfirm && (
-                                <button
-                                    onClick={() => handleStatusChange('confirm')}
-                                    disabled={actionLoading}
-                                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                                >
-                                    Confirm Booking
-                                </button>
+                        {/* Case Info */}
+                        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                            <h2 className="text-lg font-bold text-gray-900 mb-4">Case Details</h2>
+                            <div className="grid grid-cols-2 gap-4">
+                                <InfoRow label="Patient" value={booking.patientName} sub={booking.patientMrn ? `MRN: ${booking.patientMrn}` : null} />
+                                <InfoRow label="Procedure" value={booking.procedureName} />
+                                <InfoRow label="OT Room" value={booking.roomName} />
+                                <InfoRow label="Surgeon" value={booking.surgeonName ? `Dr. ${booking.surgeonName}` : '—'} />
+                                <InfoRow label="Scheduled Start" value={fmtDt(booking.scheduledStart)} />
+                                <InfoRow label="Scheduled End" value={fmtDt(booking.scheduledEnd)} />
+                                {booking.actualStart && <InfoRow label="Actual Start" value={fmtDt(booking.actualStart)} highlight />}
+                                {booking.actualEnd && <InfoRow label="Actual End" value={fmtDt(booking.actualEnd)} highlight />}
+                                {booking.actualStart && booking.actualEnd && (
+                                    <InfoRow label="Duration"
+                                        value={fmt(new Date(booking.actualEnd) - new Date(booking.actualStart))}
+                                        highlight />
+                                )}
+                            </div>
+                            {booking.notes && (
+                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Notes</p>
+                                    <p className="text-sm text-gray-700">{booking.notes}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Consumption */}
+                        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-lg font-bold text-gray-900">Consumption</h2>
+                                {!isCancelled && booking.status !== 'COMPLETED' && (
+                                    <button onClick={() => setShowAdd(true)}
+                                        className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition font-medium">
+                                        <Plus size={14} />
+                                        Add Item
+                                    </button>
+                                )}
+                            </div>
+
+                            {consumption.length === 0 ? (
+                                <p className="text-sm text-gray-400 py-4 text-center">No items added yet</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {consumption.map(item => (
+                                        <div key={item.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-xl hover:bg-gray-50 transition">
+                                            <div>
+                                                <p className="font-medium text-gray-900 text-sm">{item.itemName}</p>
+                                                <p className="text-xs text-gray-500 mt-0.5">
+                                                    {item.itemType} · Qty {item.quantity} · {fmtRupees(item.unitPrice)} each
+                                                    {item.billable && <span className="ml-1.5 text-green-600 font-medium">Billable</span>}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm font-semibold text-gray-700">{fmtRupees(item.quantity * item.unitPrice)}</span>
+                                                {!isCancelled && booking.status !== 'COMPLETED' && (
+                                                    <button onClick={() => handleDelete(item.id)}
+                                                        className="text-gray-300 hover:text-red-500 transition">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* ── Sidebar ── */}
+                    <div className="space-y-5">
+                        {/* Actions */}
+                        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                            <h3 className="font-bold text-gray-900 mb-4">Actions</h3>
+
+                            {actionError && (
+                                <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg mb-4">
+                                    <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                                    <span>{actionError}</span>
+                                </div>
                             )}
 
-                            {canStart && (
-                                <button
-                                    onClick={() => handleStatusChange('start')}
-                                    disabled={actionLoading}
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                                >
-                                    Start Surgery
-                                </button>
-                            )}
+                            <div className="space-y-2">
+                                {booking.status === 'REQUESTED' && (
+                                    <ActionBtn color="blue" label="✓ Confirm Booking" onClick={() => act('confirm')} loading={actionLoading} />
+                                )}
+                                {booking.status === 'CONFIRMED' && (
+                                    <ActionBtn color="green" label="▶ Start Surgery" onClick={() => act('start')} loading={actionLoading} />
+                                )}
+                                {booking.status === 'IN_PROGRESS' && (
+                                    <ActionBtn color="red" label="⏹ End Surgery" onClick={() => act('end')} loading={actionLoading}
+                                        hint="This will trigger billing" />
+                                )}
+                                {booking.status === 'PENDING_SANITATION' && (
+                                    <ActionBtn color="amber" label="✓ Sanitation Complete" onClick={() => act('sanitize')} loading={actionLoading} />
+                                )}
+                                {booking.status === 'COMPLETED' && (
+                                    <div className="flex items-center gap-2 text-green-600 text-sm font-medium py-2">
+                                        <CheckCircle2 size={18} />
+                                        Case completed
+                                    </div>
+                                )}
+                                {isCancelled && (
+                                    <div className="text-rose-600 text-sm font-medium py-2">Case cancelled</div>
+                                )}
+                            </div>
+                        </div>
 
-                            {canEnd && (
-                                <button
-                                    onClick={() => handleStatusChange('end')}
-                                    disabled={actionLoading}
-                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                                >
-                                    End Surgery
-                                </button>
-                            )}
+                        {/* Billing Summary */}
+                        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <IndianRupee size={16} />
+                                Billing Summary
+                            </h3>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between text-gray-600">
+                                    <span>Procedure Charge</span>
+                                    <span className="font-medium text-gray-800">{fmtRupees(procedureCharge)}</span>
+                                </div>
+                                {billable.map(item => (
+                                    <div key={item.id} className="flex justify-between text-gray-500 pl-2">
+                                        <span className="truncate max-w-32">{item.itemName} ×{item.quantity}</span>
+                                        <span>{fmtRupees(item.quantity * item.unitPrice)}</span>
+                                    </div>
+                                ))}
+                                <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between font-bold text-gray-900">
+                                    <span>Estimated Total</span>
+                                    <span>{fmtRupees(estimatedTotal)}</span>
+                                </div>
+                                {booking.status === 'IN_PROGRESS' && (
+                                    <p className="text-xs text-gray-400 mt-1">Invoice sent to IPD billing on surgery end</p>
+                                )}
+                                {booking.status === 'COMPLETED' && (
+                                    <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                                        <CheckCircle2 size={11} />
+                                        Invoice submitted to billing
+                                    </p>
+                                )}
+                            </div>
+                        </div>
 
-                            {canSanitize && (
-                                <button
-                                    onClick={() => {
-                                        if (confirm('Is the room sanitation complete?')) {
-                                            handleStatusChange('sanitize');
-                                        }
-                                    }}
-                                    disabled={actionLoading}
-                                    className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                                >
-                                    Mark Sanitation Complete
-                                </button>
-                            )}
-
-                            {canCancel && (
-                                <button
-                                    onClick={() => {
-                                        if (confirm('Are you sure you want to cancel this booking?')) {
-                                            handleStatusChange('cancel');
-                                        }
-                                    }}
-                                    disabled={actionLoading}
-                                    className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                                >
-                                    Cancel Booking
-                                </button>
-                            )}
+                        {/* Timestamps */}
+                        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                            <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-sm">
+                                <Clock size={14} />
+                                Timeline
+                            </h3>
+                            <div className="space-y-2 text-xs text-gray-500">
+                                <TimelineRow label="Booked" value={fmtDt(booking.createdAt)} />
+                                <TimelineRow label="Scheduled" value={`${fmtDt(booking.scheduledStart)} → ${new Date(booking.scheduledEnd).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`} />
+                                {booking.actualStart && <TimelineRow label="Started" value={fmtDt(booking.actualStart)} active />}
+                                {booking.actualEnd && <TimelineRow label="Ended" value={fmtDt(booking.actualEnd)} active />}
+                                {booking.sanitizedAt && <TimelineRow label="Sanitized" value={fmtDt(booking.sanitizedAt)} active />}
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Cancel confirmation */}
+            {confirmCancel && (
+                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
+                        <h3 className="font-bold text-gray-900 mb-2">Cancel this booking?</h3>
+                        <p className="text-sm text-gray-500 mb-5">This action cannot be undone. The OT slot will be freed up.</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setConfirmCancel(false)}
+                                className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                                Keep
+                            </button>
+                            <button onClick={() => { setConfirmCancel(false); act('cancel'); }}
+                                className="flex-1 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-semibold transition">
+                                Yes, Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showAdd && (
+                <AddConsumptionModal
+                    bookingId={id}
+                    onClose={() => setShowAdd(false)}
+                    onSuccess={() => { setShowAdd(false); fetchAll(); }}
+                />
+            )}
         </div>
     );
 }
 
-function getStatusColor(status) {
+function InfoRow({ label, value, sub, highlight }) {
+    return (
+        <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">{label}</p>
+            <p className={`text-sm font-semibold ${highlight ? 'text-blue-700' : 'text-gray-900'}`}>{value || '—'}</p>
+            {sub && <p className="text-xs text-gray-400">{sub}</p>}
+        </div>
+    );
+}
+
+function ActionBtn({ color, label, onClick, loading, hint }) {
     const colors = {
-        REQUESTED: 'bg-gray-300 text-gray-900 font-semibold',
-        CONFIRMED: 'bg-blue-300 text-blue-900 font-semibold',
-        IN_PROGRESS: 'bg-green-400 text-green-900 font-bold',
-        PENDING_SANITATION: 'bg-amber-300 text-amber-900 font-semibold',
-        COMPLETED: 'bg-slate-300 text-slate-900 font-semibold',
-        CANCELLED: 'bg-red-300 text-red-900 font-semibold',
+        blue:  'bg-blue-600 hover:bg-blue-700',
+        green: 'bg-green-600 hover:bg-green-700',
+        red:   'bg-red-600 hover:bg-red-700',
+        amber: 'bg-amber-500 hover:bg-amber-600',
     };
-    return colors[status] || 'bg-gray-300 text-gray-900';
+    return (
+        <div>
+            <button onClick={onClick} disabled={loading}
+                className={`w-full ${colors[color]} text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50 text-sm`}>
+                {loading ? 'Processing…' : label}
+            </button>
+            {hint && <p className="text-xs text-gray-400 mt-1 text-center">{hint}</p>}
+        </div>
+    );
+}
+
+function TimelineRow({ label, value, active }) {
+    return (
+        <div className="flex justify-between">
+            <span className={active ? 'text-blue-600 font-medium' : ''}>{label}</span>
+            <span className={active ? 'text-blue-700 font-medium' : ''}>{value}</span>
+        </div>
+    );
 }
 
 function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
@@ -273,207 +440,112 @@ function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
     const [error, setError] = useState(null);
     const [kits, setKits] = useState([]);
     const [kitSearch, setKitSearch] = useState('');
-    const [showKitDropdown, setShowKitDropdown] = useState(false);
-    const [loadingKits, setLoadingKits] = useState(false);
-    const [formData, setFormData] = useState({
-        itemName: '',
-        itemType: 'CONSUMABLE',
-        quantity: 1,
-        unitPrice: 0,
-        inventoryItemId: null,
-        billable: true,
-    });
+    const [showDrop, setShowDrop] = useState(false);
+    const [form, setForm] = useState({ itemName: '', itemType: 'CONSUMABLE', quantity: 1, unitPrice: '', inventoryItemId: null, billable: true });
 
     useEffect(() => {
-        if (formData.itemType !== 'KIT') {
-            setKits([]);
-            setKitSearch('');
-            setShowKitDropdown(false);
-            setFormData((prev) => ({ ...prev, inventoryItemId: null }));
-            return;
-        }
+        if (form.itemType !== 'KIT') { setKits([]); setKitSearch(''); return; }
+        getInventoryKits().then(r => setKits(r.data || [])).catch(() => setKits([]));
+    }, [form.itemType]);
 
-        const fetchKits = async () => {
-            setLoadingKits(true);
-            try {
-                const res = await getInventoryKits();
-                setKits(res.data || []);
-            } catch (e) {
-                setKits([]);
-            } finally {
-                setLoadingKits(false);
-            }
-        };
+    const filtered = kits.filter(k => !kitSearch || k.name?.toLowerCase().includes(kitSearch.toLowerCase()) || k.code?.toLowerCase().includes(kitSearch.toLowerCase()));
 
-        fetchKits();
-    }, [formData.itemType]);
-
-    const filteredKits = kits.filter((k) => {
-        if (!kitSearch) return true;
-        const q = kitSearch.toLowerCase();
-        return k.name?.toLowerCase().includes(q) || k.code?.toLowerCase().includes(q);
-    });
-
-    const handleKitSelect = (kit) => {
-        setFormData((prev) => ({
-            ...prev,
-            itemName: kit?.name || prev.itemName,
-            inventoryItemId: kit?.id || null,
-        }));
-        setKitSearch('');
-        setShowKitDropdown(false);
-    };
-
-    const handleSubmit = async (e) => {
+    const submit = async (e) => {
         e.preventDefault();
-        setLoading(true);
-        setError(null);
-
+        if (form.itemType === 'KIT' && !form.inventoryItemId) { setError('Please select a kit from the list'); return; }
+        setLoading(true); setError(null);
         try {
-            if (formData.itemType === 'KIT' && !formData.inventoryItemId) {
-                setError('Please select a kit');
-                return;
-            }
-            await addConsumptionItem(bookingId, {
-                ...formData,
-                quantity: parseInt(formData.quantity),
-                unitPrice: parseFloat(formData.unitPrice),
-            });
+            await addConsumptionItem(bookingId, { ...form, quantity: Number(form.quantity), unitPrice: parseFloat(form.unitPrice) || 0 });
             onSuccess();
-        } catch (error) {
-            setError(error.response?.data?.message || 'Failed to add item');
+        } catch (e) {
+            setError(e.response?.data?.message || 'Failed to add item');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
-                <div className="p-6 border-b flex justify-between items-center">
-                    <h2 className="text-xl font-bold">Add Consumption Item</h2>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
+                <div className="px-6 py-4 border-b flex items-center justify-between">
+                    <h2 className="font-bold text-gray-900">Add Consumption Item</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
                 </div>
+                <form onSubmit={submit} className="p-6 space-y-4">
+                    {error && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {error && (
-                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded text-sm">
-                            {error}
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5">Type</label>
+                        <div className="flex gap-2">
+                            {['KIT', 'IMPLANT', 'CONSUMABLE'].map(t => (
+                                <button key={t} type="button"
+                                    onClick={() => setForm(f => ({ ...f, itemType: t, itemName: '', inventoryItemId: null }))}
+                                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${form.itemType === t ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+                                    {t}
+                                </button>
+                            ))}
                         </div>
-                    )}
+                    </div>
 
-                    {formData.itemType === 'KIT' ? (
+                    {form.itemType === 'KIT' ? (
                         <div className="relative">
-                            <label className="block text-sm font-semibold mb-2">Select Kit</label>
-                            <input
-                                type="text"
-                                placeholder={loadingKits ? 'Loading kits...' : 'Search kit name/code...'}
-                                value={kitSearch}
-                                onChange={(e) => {
-                                    setKitSearch(e.target.value);
-                                    setShowKitDropdown(true);
-                                }}
-                                onFocus={() => setShowKitDropdown(true)}
-                                className="w-full border rounded px-3 py-2"
-                            />
-
-                            {showKitDropdown && filteredKits.length > 0 && (
-                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
-                                    {filteredKits.map((kit) => (
-                                        <button
-                                            key={kit.id}
-                                            type="button"
-                                            onClick={() => handleKitSelect(kit)}
-                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0"
-                                        >
-                                            <p className="font-semibold">{kit.name}</p>
-                                            {kit.code && <p className="text-xs text-gray-600">Code: {kit.code}</p>}
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Select Kit</label>
+                            <input value={kitSearch} onChange={e => { setKitSearch(e.target.value); setShowDrop(true); }}
+                                onFocus={() => setShowDrop(true)}
+                                placeholder="Search by name or code…"
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            {showDrop && filtered.length > 0 && (
+                                <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-44 overflow-y-auto">
+                                    {filtered.map(k => (
+                                        <button key={k.id} type="button"
+                                            onClick={() => { setForm(f => ({ ...f, itemName: k.name, inventoryItemId: k.id, unitPrice: k.price || f.unitPrice })); setKitSearch(k.name); setShowDrop(false); }}
+                                            className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b last:border-b-0 text-sm">
+                                            <p className="font-medium text-gray-900">{k.name}</p>
+                                            {k.code && <p className="text-xs text-gray-400">Code: {k.code}</p>}
                                         </button>
                                     ))}
                                 </div>
                             )}
-
-                            {formData.inventoryItemId && (
-                                <p className="mt-2 text-sm text-gray-700">
-                                    Selected: <span className="font-semibold">{formData.itemName}</span>
-                                </p>
+                            {form.inventoryItemId && (
+                                <p className="mt-1.5 text-xs text-green-600 font-medium">✓ {form.itemName}</p>
                             )}
                         </div>
                     ) : (
                         <div>
-                            <label className="block text-sm font-semibold mb-2">Item Name</label>
-                            <input
-                                type="text"
-                                value={formData.itemName}
-                                onChange={(e) => setFormData({ ...formData, itemName: e.target.value.slice(0, 255) })}
-                                maxLength={255}
-                                className="w-full border rounded px-3 py-2"
-                                required
-                            />
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Item Name</label>
+                            <input value={form.itemName} onChange={e => setForm(f => ({ ...f, itemName: e.target.value }))}
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
                         </div>
                     )}
 
-                    <div>
-                        <label className="block text-sm font-semibold mb-2">Type</label>
-                        <select
-                            value={formData.itemType}
-                            onChange={(e) => setFormData({ ...formData, itemType: e.target.value, itemName: '', inventoryItemId: null })}
-                            className="w-full border rounded px-3 py-2"
-                        >
-                            <option>KIT</option>
-                            <option>IMPLANT</option>
-                            <option>CONSUMABLE</option>
-                        </select>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Quantity</label>
+                            <input type="number" min="1" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1.5">Unit Price (₹)</label>
+                            <input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setForm(f => ({ ...f, unitPrice: e.target.value }))}
+                                placeholder="0.00"
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                        </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-semibold mb-2">Quantity</label>
-                        <input
-                            type="number"
-                            value={formData.quantity}
-                            onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                            className="w-full border rounded px-3 py-2"
-                            min="1"
-                            required
-                        />
-                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" checked={form.billable} onChange={e => setForm(f => ({ ...f, billable: e.target.checked }))}
+                            className="w-4 h-4 rounded accent-blue-600" />
+                        <span className="text-sm font-medium text-gray-700">Add to patient bill</span>
+                    </label>
 
-                    <div>
-                        <label className="block text-sm font-semibold mb-2">Unit Price</label>
-                        <input
-                            type="number"
-                            value={formData.unitPrice}
-                            onChange={(e) => setFormData({ ...formData, unitPrice: e.target.value })}
-                            className="w-full border rounded px-3 py-2"
-                            step="0.01"
-                            required
-                        />
-                    </div>
-
-                    <div className="flex items-center">
-                        <input
-                            type="checkbox"
-                            checked={formData.billable}
-                            onChange={(e) => setFormData({ ...formData, billable: e.target.checked })}
-                            className="w-4 h-4 mr-2"
-                        />
-                        <label className="text-sm font-semibold">Billable</label>
-                    </div>
-
-                    <div className="flex gap-4 pt-4">
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                        >
-                            {loading ? 'Adding...' : 'Add Item'}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 rounded-lg transition"
-                        >
+                    <div className="flex gap-3 pt-2">
+                        <button type="button" onClick={onClose}
+                            className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
                             Cancel
+                        </button>
+                        <button type="submit" disabled={loading}
+                            className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition disabled:opacity-50">
+                            {loading ? 'Adding…' : 'Add Item'}
                         </button>
                     </div>
                 </form>
