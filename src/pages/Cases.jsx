@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getBookings, createBooking, addConsumptionItem, getHmsPatients, getHmsRooms, getHmsDoctors, getDirectorySurgeons, getInventoryKits, getOtAdmissions } from '../api/client';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import { Plus, Search, MoreVertical } from 'lucide-react';
 
 const MAX_RETRIES = 3;
 
@@ -147,7 +147,7 @@ export default function Cases() {
                             </tr>
                         )}
                         {bookings.map(booking => (
-                            <tr key={booking.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/cases/${booking.id}`)}>
+                            <tr key={booking.id} className="border-b hover:bg-gray-50">
                                 <td className="px-6 py-4">
                                     <p className="text-sm font-semibold text-black">{booking.patientName}</p>
                                     {booking.patientMrn && <p className="text-xs text-gray-500 mt-0.5">MRN: {booking.patientMrn}</p>}
@@ -177,13 +177,33 @@ export default function Cases() {
                                         {booking.status.replace('_', ' ')}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                                    <button
-                                        onClick={() => navigate(`/cases/${booking.id}`)}
-                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                                    >
-                                        View
-                                    </button>
+                                <td className="px-6 py-4">
+                                    <div className="relative dropdown-menu">
+                                        <button
+                                            onClick={() => toggleDropdown(booking.id)}
+                                            className="p-1 rounded hover:bg-gray-100 transition"
+                                        >
+                                            <MoreVertical size={16} className="text-gray-500" />
+                                        </button>
+                                        {dropdownOpen === booking.id && (
+                                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+                                                <button
+                                                    onClick={() => handleAdmitBooking(booking)}
+                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                                >
+                                                    <Plus size={14} />
+                                                    Admit Patient
+                                                </button>
+                                                <button
+                                                    onClick={() => handleViewPatientDetails(booking)}
+                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                                >
+                                                    <Search size={14} />
+                                                    Patient Details
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -219,6 +239,7 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
     const [showSurgeonDropdown, setShowSurgeonDropdown] = useState(false);
     const [searchingSurgeons, setSearchingSurgeons] = useState(false);
     const [specialization, setSpecialization] = useState('');
+    const [dropdownOpen, setDropdownOpen] = useState(null);
     const [rooms, setRooms] = useState([]);
     const [allRooms, setAllRooms] = useState([]);
     const [roomSearch, setRoomSearch] = useState('');
@@ -419,7 +440,15 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
     };
 
     useEffect(() => {
-        updateRoomOptions(roomSearch);
+        const handleClickOutside = (event) => {
+            if (!event.target.closest('.dropdown-menu')) {
+                setDropdownOpen(null);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
         if (formData.roomId) {
             const availableIds = new Set(getAvailableRooms().map((r) => Number(r.id)));
@@ -476,6 +505,27 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
         setSurgeonSearch(value);
         setShowSurgeonDropdown(true);
         searchSurgeons(value);
+    };
+
+    const toggleDropdown = (bookingId) => {
+        setDropdownOpen(dropdownOpen === bookingId ? null : bookingId);
+    };
+
+    const handleAdmitBooking = (booking) => {
+        setPrefilledPatient({
+            patientId: booking.patientId,
+            patientName: booking.patientName,
+            patientMrn: booking.patientMrn,
+        });
+        setShowModal(true);
+        setDropdownOpen(null);
+    };
+
+    const handleViewPatientDetails = (booking) => {
+        // For now, navigate to booking details which contains patient info
+        // In future, could navigate to dedicated patient details page
+        navigate(`/cases/${booking.id}`);
+        setDropdownOpen(null);
     };
 
     const handleRoomSearchChange = (e) => {
