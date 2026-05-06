@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { LogOut, BarChart3, Grid3x3, BookOpen } from 'lucide-react';
 
 export default function Layout() {

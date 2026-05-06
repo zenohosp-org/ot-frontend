@@ -1,14 +1,18 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getBookings, createBooking, addConsumptionItem, getHmsPatients, getHmsRooms, getHmsDoctors, getDirectorySurgeons, getInventoryKits, getOtAdmissions } from '../api/client';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import {
+    getBookings, createBooking, addConsumptionItem,
+    getHmsPatients, getHmsRooms, getHmsDoctors,
+    getInventoryKits, getActiveAdmissions,
+} from '../api/client';
+import { Plus, Search, Trash2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 
 const MAX_RETRIES = 3;
 
 function isOtRoom(room) {
-    const roomNumber = (room?.roomNumber || '').toString().toLowerCase();
-    const roomCode = (room?.roomCode || '').toString().toLowerCase();
-    return roomNumber.includes('ot') || roomCode.includes('ot');
+    return room?.roomType === 'OT' ||
+        (room?.roomNumber || '').toString().toLowerCase().includes('ot') ||
+        (room?.roomCode || '').toString().toLowerCase().includes('ot');
 }
 
 function overlapsWithBuffer(desiredStart, desiredEnd, existingStart, existingEnd, bufferMinutes = 30) {
@@ -16,9 +20,41 @@ function overlapsWithBuffer(desiredStart, desiredEnd, existingStart, existingEnd
     return existingStart < desiredEndWithBuffer && existingEnd > desiredStart;
 }
 
+const STATUS_CONFIG = {
+    REQUESTED:          { label: 'Requested',          classes: 'bg-gray-100 text-gray-700 border border-gray-300' },
+    CONFIRMED:          { label: 'Confirmed',           classes: 'bg-blue-100 text-blue-800 border border-blue-300' },
+    IN_PROGRESS:        { label: 'In Progress',         classes: 'bg-green-100 text-green-800 border border-green-300' },
+    PENDING_SANITATION: { label: 'Pending Sanitation',  classes: 'bg-amber-100 text-amber-800 border border-amber-300' },
+    COMPLETED:          { label: 'Completed',           classes: 'bg-slate-100 text-slate-700 border border-slate-300' },
+    CANCELLED:          { label: 'Cancelled',           classes: 'bg-red-100 text-red-700 border border-red-300' },
+};
+
+function StatusBadge({ status }) {
+    const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.REQUESTED;
+    return (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.classes}`}>
+            {cfg.label}
+        </span>
+    );
+}
+
+function formatDate(dt) {
+    return new Date(dt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function formatTime(dt) {
+    return new Date(dt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+function getDuration(start, end) {
+    const mins = Math.round((new Date(end) - new Date(start)) / 60000);
+    return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+}
+function isToday(dt) {
+    return new Date(dt).toDateString() === new Date().toDateString();
+}
+
 export default function Cases() {
     const [bookings, setBookings] = useState([]);
-    const [otAdmissions, setOtAdmissions] = useState([]);
+    const [admissions, setAdmissions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [prefilledPatient, setPrefilledPatient] = useState(null);
@@ -26,170 +62,143 @@ export default function Cases() {
 
     useEffect(() => {
         fetchBookings();
-        fetchOtAdmissions();
+        fetchAdmissions();
     }, []);
 
     const fetchBookings = async () => {
         try {
             const res = await getBookings({});
-            setBookings(res.data);
-        } catch (error) {
-            console.error('Error fetching bookings:', error);
+            setBookings(Array.isArray(res.data) ? res.data : []);
+        } catch {
+            setBookings([]);
         } finally {
             setLoading(false);
         }
     };
 
-    const fetchOtAdmissions = async () => {
+    const fetchAdmissions = async () => {
         try {
-            const res = await getOtAdmissions();
-            setOtAdmissions(res.data || []);
+            const res = await getActiveAdmissions();
+            setAdmissions(Array.isArray(res.data) ? res.data : []);
         } catch {
-            setOtAdmissions([]);
+            setAdmissions([]);
         }
     };
 
-    const handleAdmitPatient = (admission) => {
+    const handleBookFromAdmission = (admission) => {
         setPrefilledPatient({
             patientId: admission.patientId,
             patientName: admission.patientName,
             patientMrn: admission.patientMrn,
-            roomId: admission.roomId,
-            roomName: admission.roomNumber,
+            roomId: admission.roomType === 'OT' ? admission.roomId : '',
+            roomName: admission.roomType === 'OT' ? admission.roomNumber : '',
         });
         setShowModal(true);
     };
 
-    const getStatusColor = (status) => {
-        const colors = {
-            REQUESTED: 'bg-gray-200 text-gray-900',
-            CONFIRMED: 'bg-blue-200 text-blue-900 font-semibold',
-            IN_PROGRESS: 'bg-green-300 text-green-900 font-semibold',
-            PENDING_SANITATION: 'bg-amber-200 text-amber-900 font-semibold',
-            COMPLETED: 'bg-slate-200 text-slate-900',
-            CANCELLED: 'bg-red-200 text-red-900',
-        };
-        return colors[status] || 'bg-gray-200 text-gray-900';
-    };
+    const activeAdmissions = admissions.filter(a =>
+        !bookings.some(
+            b => String(b.patientId) === String(a.patientId) &&
+                 !['COMPLETED', 'CANCELLED'].includes(b.status)
+        )
+    );
 
-    const formatDate = (dt) => new Date(dt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-    const formatTime = (dt) => new Date(dt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-    const getDuration = (start, end) => {
-        const mins = Math.round((new Date(end) - new Date(start)) / 60000);
-        return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
-    };
-    const isToday = (dt) => new Date(dt).toDateString() === new Date().toDateString();
-
-    if (loading) return <div className="p-8 text-black">Loading...</div>;
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
 
     return (
-        <div className="p-8">
-            <div className="flex items-center justify-between mb-8">
-                <h1 className="text-3xl font-bold text-black">Cases</h1>
+        <div className="p-6 space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Cases</h1>
+                    <p className="text-sm text-gray-500 mt-0.5">Manage OT bookings and surgical cases</p>
+                </div>
                 <button
                     onClick={() => setShowModal(true)}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
+                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                 >
-                    <Plus size={20} />
+                    <Plus size={16} />
                     New Booking
                 </button>
             </div>
 
-            {otAdmissions.length > 0 && (
-                <div className="mb-6">
-                    <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Patients in OT Rooms</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {otAdmissions.map((admission) => {
-                            const alreadyBooked = bookings.some(
-                                b => String(b.patientId) === String(admission.patientId) &&
-                                     !['COMPLETED', 'CANCELLED'].includes(b.status)
-                            );
-                            return (
-                                <div key={admission.id} className="bg-white border rounded-lg p-4 flex items-center justify-between shadow-sm">
-                                    <div>
-                                        <p className="font-semibold text-black text-sm">{admission.patientName}</p>
-                                        <p className="text-xs text-gray-500">MRN: {admission.patientMrn}</p>
-                                        <p className="text-xs text-gray-500 mt-0.5">Room: {admission.roomNumber}</p>
-                                    </div>
-                                    {alreadyBooked
-                                        ? <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-semibold">Booked</span>
-                                        : <button
-                                            onClick={() => handleAdmitPatient(admission)}
-                                            className="flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded transition"
-                                          >
-                                            <Plus size={14} /> Book OT
-                                          </button>
-                                    }
-                                </div>
-                            );
-                        })}
+            {/* Admitted Patients Panel */}
+            {activeAdmissions.length > 0 && (
+                <section>
+                    <div className="flex items-center gap-2 mb-3">
+                        <AlertCircle size={16} className="text-amber-600" />
+                        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                            Admitted Patients Awaiting OT Booking
+                        </h2>
+                        <span className="ml-1 bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                            {activeAdmissions.length}
+                        </span>
                     </div>
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {activeAdmissions.map((admission) => (
+                            <AdmissionCard
+                                key={admission.id}
+                                admission={admission}
+                                onBook={() => handleBookFromAdmission(admission)}
+                            />
+                        ))}
+                    </div>
+                </section>
             )}
 
-            <div className="bg-white rounded-lg shadow overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr className="border-b bg-gray-50">
-                            <th className="px-6 py-3 text-left font-semibold text-black">Patient</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Procedure</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Room</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Surgeon</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Schedule</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Status</th>
-                            <th className="px-6 py-3 text-left font-semibold text-black">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {bookings.length === 0 && (
-                            <tr>
-                                <td colSpan={7} className="px-6 py-10 text-center text-gray-500">No cases found</td>
-                            </tr>
-                        )}
-                        {bookings.map(booking => (
-                            <tr key={booking.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/cases/${booking.id}`)}>
-                                <td className="px-6 py-4">
-                                    <p className="text-sm font-semibold text-black">{booking.patientName}</p>
-                                    {booking.patientMrn && <p className="text-xs text-gray-500 mt-0.5">MRN: {booking.patientMrn}</p>}
-                                </td>
-                                <td className="px-6 py-4">
-                                    <p className="text-sm text-black">{booking.procedureName}</p>
-                                    {booking.procedureCharge && (
-                                        <p className="text-xs text-gray-500 mt-0.5">₹{Number(booking.procedureCharge).toLocaleString('en-IN')}</p>
-                                    )}
-                                </td>
-                                <td className="px-6 py-4 text-sm text-black">{booking.roomName}</td>
-                                <td className="px-6 py-4 text-sm text-black">{booking.surgeonName}</td>
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-1">
-                                        <p className="text-sm text-black">{formatDate(booking.scheduledStart)}</p>
-                                        {isToday(booking.scheduledStart) && (
-                                            <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">Today</span>
-                                        )}
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-0.5">
-                                        {formatTime(booking.scheduledStart)} – {formatTime(booking.scheduledEnd)}
-                                        <span className="ml-1 text-gray-400">({getDuration(booking.scheduledStart, booking.scheduledEnd)})</span>
-                                    </p>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <span className={`px-3 py-1 rounded text-xs font-semibold ${getStatusColor(booking.status)}`}>
-                                        {booking.status.replace('_', ' ')}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                                    <button
-                                        onClick={() => navigate(`/cases/${booking.id}`)}
-                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                                    >
-                                        View
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            {/* Bookings Table */}
+            <section>
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                        <h2 className="text-sm font-semibold text-gray-700">All Bookings</h2>
+                        <span className="text-xs text-gray-500">{bookings.length} total</span>
+                    </div>
+
+                    {bookings.length === 0 ? (
+                        <div className="py-16 text-center">
+                            <CheckCircle2 size={40} className="mx-auto text-gray-300 mb-3" />
+                            <p className="text-gray-500 text-sm">No bookings yet</p>
+                            <button
+                                onClick={() => setShowModal(true)}
+                                className="mt-3 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                            >
+                                Create the first booking
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                        <th className="px-6 py-3">Patient</th>
+                                        <th className="px-6 py-3">Procedure</th>
+                                        <th className="px-6 py-3">Room</th>
+                                        <th className="px-6 py-3">Surgeon</th>
+                                        <th className="px-6 py-3">Schedule</th>
+                                        <th className="px-6 py-3">Status</th>
+                                        <th className="px-6 py-3 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {bookings.map(booking => (
+                                        <BookingRow
+                                            key={booking.id}
+                                            booking={booking}
+                                            onClick={() => navigate(`/cases/${booking.id}`)}
+                                        />
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </section>
 
             {showModal && (
                 <CreateBookingModal
@@ -199,7 +208,7 @@ export default function Cases() {
                         setShowModal(false);
                         setPrefilledPatient(null);
                         fetchBookings();
-                        fetchOtAdmissions();
+                        fetchAdmissions();
                     }}
                 />
             )}
@@ -207,37 +216,126 @@ export default function Cases() {
     );
 }
 
+function AdmissionCard({ admission, onBook }) {
+    const isOT = admission.roomType === 'OT';
+    return (
+        <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm flex flex-col gap-3">
+            <div>
+                <p className="font-semibold text-gray-900 text-sm">{admission.patientName}</p>
+                <p className="text-xs text-gray-500 mt-0.5">MRN: {admission.patientMrn}</p>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                        ${isOT ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {admission.roomNumber || 'No room'}
+                    </span>
+                    <span className="text-xs text-gray-400">{admission.roomType}</span>
+                </div>
+            </div>
+            <button
+                onClick={onBook}
+                className="w-full inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition-colors"
+            >
+                <Plus size={13} />
+                Book for OT
+            </button>
+        </div>
+    );
+}
+
+function BookingRow({ booking, onClick }) {
+    return (
+        <tr
+            className="hover:bg-gray-50 cursor-pointer transition-colors"
+            onClick={onClick}
+        >
+            <td className="px-6 py-4">
+                <p className="font-semibold text-gray-900">{booking.patientName}</p>
+                {booking.patientMrn && (
+                    <p className="text-xs text-gray-500 mt-0.5">MRN: {booking.patientMrn}</p>
+                )}
+            </td>
+            <td className="px-6 py-4">
+                <p className="text-gray-800">{booking.procedureName}</p>
+                {booking.procedureCharge && (
+                    <p className="text-xs text-gray-500 mt-0.5">
+                        ₹{Number(booking.procedureCharge).toLocaleString('en-IN')}
+                    </p>
+                )}
+            </td>
+            <td className="px-6 py-4 text-gray-700">{booking.roomName}</td>
+            <td className="px-6 py-4 text-gray-700">{booking.surgeonName}</td>
+            <td className="px-6 py-4">
+                <div className="flex items-center gap-1.5">
+                    <p className="text-gray-800">{formatDate(booking.scheduledStart)}</p>
+                    {isToday(booking.scheduledStart) && (
+                        <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-1.5 py-0.5 rounded">
+                            Today
+                        </span>
+                    )}
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                    {formatTime(booking.scheduledStart)} – {formatTime(booking.scheduledEnd)}
+                    <span className="ml-1 text-gray-400">
+                        ({getDuration(booking.scheduledStart, booking.scheduledEnd)})
+                    </span>
+                </p>
+            </td>
+            <td className="px-6 py-4">
+                <StatusBadge status={booking.status} />
+            </td>
+            <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
+                <button
+                    onClick={onClick}
+                    className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                    View
+                </button>
+            </td>
+        </tr>
+    );
+}
+
+// ─── Create Booking Modal ─────────────────────────────────────────────────────
+
 function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+
+    // Patient
     const [patients, setPatients] = useState([]);
     const [patientSearch, setPatientSearch] = useState('');
-    const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+    const [showPatientDrop, setShowPatientDrop] = useState(false);
     const [searchingPatients, setSearchingPatients] = useState(false);
-    const [surgeons, setSurgeons] = useState([]);
-    const [surgeonSearch, setSurgeonSearch] = useState('');
-    const [showSurgeonDropdown, setShowSurgeonDropdown] = useState(false);
-    const [searchingSurgeons, setSearchingSurgeons] = useState(false);
-    const [specialization, setSpecialization] = useState('');
-    const [rooms, setRooms] = useState([]);
+
+    // Room
     const [allRooms, setAllRooms] = useState([]);
+    const [rooms, setRooms] = useState([]);
     const [roomSearch, setRoomSearch] = useState('');
-    const [showRoomDropdown, setShowRoomDropdown] = useState(false);
+    const [showRoomDrop, setShowRoomDrop] = useState(false);
     const [loadingRooms, setLoadingRooms] = useState(false);
     const [roomError, setRoomError] = useState(null);
-    const [retryingRooms, setRetryingRooms] = useState(false);
-    const [dayBookings, setDayBookings] = useState([]);
-    const [kits, setKits] = useState([]);
+
+    // Surgeon
+    const [surgeons, setSurgeons] = useState([]);
+    const [surgeonSearch, setSurgeonSearch] = useState('');
+    const [showSurgeonDrop, setShowSurgeonDrop] = useState(false);
+    const [searchingSurgeons, setSearchingSurgeons] = useState(false);
+    const [specialization, setSpecialization] = useState('');
+
+    // Kits
     const [allKits, setAllKits] = useState([]);
     const [kitSearch, setKitSearch] = useState('');
-    const [showKitDropdown, setShowKitDropdown] = useState(false);
+    const [showKitDrop, setShowKitDrop] = useState(false);
     const [loadingKits, setLoadingKits] = useState(false);
     const [kitError, setKitError] = useState(null);
-    const [retryingKits, setRetryingKits] = useState(false);
-    const retryTimeoutRef = useRef({ rooms: null, kits: null });
-    const retryCountRef = useRef({ rooms: 0, kits: 0 });
     const [selectedKits, setSelectedKits] = useState([]);
-    const [formData, setFormData] = useState({
+
+    // Day bookings for conflict preview
+    const [dayBookings, setDayBookings] = useState([]);
+
+    const retryTimeout = useRef({ rooms: null, kits: null });
+
+    const [form, setForm] = useState({
         patientId: prefilled?.patientId ?? '',
         patientName: prefilled?.patientName ?? '',
         patientMrn: prefilled?.patientMrn ?? '',
@@ -252,342 +350,152 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
         notes: '',
     });
 
+    // Load rooms
     useEffect(() => {
-        const fetchRooms = async (retryCount = 0) => {
-            retryCount === 0 ? setLoadingRooms(true) : setRetryingRooms(true);
+        const fetchRooms = async (retry = 0) => {
+            if (retry === 0) setLoadingRooms(true);
             setRoomError(null);
             try {
                 const res = await getHmsRooms();
                 const otRooms = (res.data || []).filter(isOtRoom);
                 setAllRooms(otRooms);
                 setRooms(otRooms);
-                setRoomError(null);
-                setRetryingRooms(false);
-            } catch (e) {
-                console.error('Error fetching rooms:', e);
-                setAllRooms([]);
-                setRooms([]);
-                if (retryCount < MAX_RETRIES) {
-                    setRoomError('Failed to load rooms. Retrying...');
-                    setRetryingRooms(true);
-                    retryTimeoutRef.current.rooms = setTimeout(() => fetchRooms(retryCount + 1), 5000);
+            } catch {
+                if (retry < MAX_RETRIES) {
+                    setRoomError('Retrying room list...');
+                    retryTimeout.current.rooms = setTimeout(() => fetchRooms(retry + 1), 4000);
                 } else {
-                    setRoomError('Could not load rooms. Enter room name manually.');
-                    setRetryingRooms(false);
+                    setRoomError('Could not load rooms. Enter manually.');
                 }
             } finally {
-                if (retryCount === 0) setLoadingRooms(false);
+                if (retry === 0) setLoadingRooms(false);
             }
         };
 
-        const fetchKits = async (retryCount = 0) => {
-            retryCount === 0 ? setLoadingKits(true) : setRetryingKits(true);
+        const fetchKits = async (retry = 0) => {
+            if (retry === 0) setLoadingKits(true);
             setKitError(null);
-            console.log('[DEBUG Cases] fetchKits called, retryCount:', retryCount);
             try {
-                console.log('[DEBUG Cases] About to call getInventoryKits()');
                 const res = await getInventoryKits();
-                console.log('[DEBUG Cases] Successfully fetched kits:', res);
                 setAllKits(res.data || []);
-                setKits(res.data || []);
-                setKitError(null);
-                setRetryingKits(false);
-            } catch (e) {
-                console.error('[DEBUG Cases] Error fetching kits:', e);
-                console.error('[DEBUG Cases] Error response status:', e.response?.status);
-                console.error('[DEBUG Cases] Error response data:', e.response?.data);
-                console.error('[DEBUG Cases] Error message:', e.message);
-                setAllKits([]);
-                setKits([]);
-                if (retryCount < MAX_RETRIES) {
-                    setKitError('Loading inventory kits... You can add custom items.');
-                    setRetryingKits(true);
-                    retryTimeoutRef.current.kits = setTimeout(() => fetchKits(retryCount + 1), 5000);
+            } catch {
+                if (retry < MAX_RETRIES) {
+                    setKitError('Loading inventory kits...');
+                    retryTimeout.current.kits = setTimeout(() => fetchKits(retry + 1), 4000);
                 } else {
-                    setKitError('Inventory unavailable. Add custom items manually.');
-                    setRetryingKits(false);
+                    setKitError('Inventory unavailable. Add items manually.');
                 }
             } finally {
-                if (retryCount === 0) setLoadingKits(false);
+                if (retry === 0) setLoadingKits(false);
             }
         };
 
         fetchRooms();
         fetchKits();
-
         return () => {
-            clearTimeout(retryTimeoutRef.current.rooms);
-            clearTimeout(retryTimeoutRef.current.kits);
+            clearTimeout(retryTimeout.current.rooms);
+            clearTimeout(retryTimeout.current.kits);
         };
     }, []);
 
-    // Debug: Test inventory endpoint directly
+    // Fetch day bookings when start time changes (for conflict preview)
     useEffect(() => {
-        const testInventoryEndpoint = async () => {
-            console.log('\n=== [DEBUG TEST] Starting inventory endpoint diagnosis ===');
+        const start = form.scheduledStart ? new Date(form.scheduledStart) : null;
+        if (!start || Number.isNaN(start.getTime())) { setDayBookings([]); return; }
+        const date = start.toISOString().slice(0, 10);
+        getBookings({ date }).then(r => setDayBookings(r.data || [])).catch(() => setDayBookings([]));
+    }, [form.scheduledStart]);
 
-            // Test 1: Via proxy (normal path)
-            console.log('[DEBUG TEST] Test 1: Calling via proxy /api/proxy/inventory/kits');
-            try {
-                const axiosResponse = await fetch('https://api-ot.zenohosp.com/api/proxy/inventory/kits', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                    },
-                    credentials: 'include'
-                });
-                console.log('[DEBUG TEST] Status:', axiosResponse.status);
-                console.log('[DEBUG TEST] Headers:', Object.fromEntries(axiosResponse.headers));
-                const data = await axiosResponse.text();
-                console.log('[DEBUG TEST] Response body:', data);
-            } catch (err) {
-                console.error('[DEBUG TEST] Fetch error:', err);
-            }
-
-            // Test 2: Check what's in localStorage/sessionStorage
-            console.log('[DEBUG TEST] Test 2: Checking stored auth tokens');
-            console.log('[DEBUG TEST] localStorage keys:', Object.keys(localStorage));
-            console.log('[DEBUG TEST] sessionStorage keys:', Object.keys(sessionStorage));
-            console.log('[DEBUG TEST] sso_token cookie exists:', document.cookie.includes('sso_token'));
-        };
-
-        testInventoryEndpoint();
-    }, []);
-
+    // Recompute available rooms when time or bookings change
     useEffect(() => {
-        const start = formData.scheduledStart ? new Date(formData.scheduledStart) : null;
-        if (!start || Number.isNaN(start.getTime())) {
-            setDayBookings([]);
-            return;
-        }
-
-        const fetchDayBookings = async () => {
-            try {
-                const date = start.toISOString().slice(0, 10);
-                const res = await getBookings({ date });
-                setDayBookings(res.data || []);
-            } catch (e) {
-                setDayBookings([]);
-            }
-        };
-
-        fetchDayBookings();
-    }, [formData.scheduledStart]);
-
-    const getAvailableRooms = () => {
-        const desiredStart = formData.scheduledStart ? new Date(formData.scheduledStart) : null;
-        const desiredEnd = formData.scheduledEnd ? new Date(formData.scheduledEnd) : null;
-
-        if (!desiredStart || !desiredEnd || Number.isNaN(desiredStart.getTime()) || Number.isNaN(desiredEnd.getTime())) {
-            return allRooms;
-        }
-
-        const activeBookings = (dayBookings || []).filter(
-            (b) => !['CANCELLED', 'COMPLETED'].includes(b.status)
-        );
-
-        return allRooms.filter((room) => {
-            const conflicts = activeBookings.some((b) => {
-                if (Number(b.roomId) !== Number(room.id)) return false;
-                const bStart = new Date(b.scheduledStart);
-                const bEnd = new Date(b.scheduledEnd);
-                if (Number.isNaN(bStart.getTime()) || Number.isNaN(bEnd.getTime())) return false;
-                return overlapsWithBuffer(desiredStart, desiredEnd, bStart, bEnd, 30);
-            });
-            return !conflicts;
-        });
-    };
-
-    const updateRoomOptions = (query) => {
         const available = getAvailableRooms();
-        const q = (query || '').toLowerCase();
-        const filtered = available.filter((room) => {
-            if (!q) return true;
-            return (
-                room.roomNumber?.toLowerCase().includes(q) ||
-                room.roomType?.toLowerCase().includes(q) ||
-                room.roomCode?.toLowerCase().includes(q)
-            );
-        });
-        setRooms(filtered);
-    };
-
-    const updateKitOptions = (query) => {
-        const q = (query || '').toLowerCase();
-        const filtered = allKits.filter((kit) => {
-            if (!q) return true;
-            return kit.name?.toLowerCase().includes(q) || kit.code?.toLowerCase().includes(q);
-        });
-        setKits(filtered);
-    };
-
-    const searchPatients = async (query) => {
-        if (query.length < 2) {
-            setPatients([]);
-            return;
-        }
-
-        setSearchingPatients(true);
-        try {
-            const res = await getHmsPatients(query);
-            setPatients(res.data || []);
-        } catch (error) {
-            console.error('Error searching patients:', error);
-            setPatients([]);
-        } finally {
-            setSearchingPatients(false);
-        }
-    };
-
-    const searchSurgeons = async (query) => {
-        if (query.length < 2) {
-            setSurgeons([]);
-            return;
-        }
-
-        setSearchingSurgeons(true);
-        try {
-            const res = await getHmsDoctors(query, specialization || undefined);
-            setSurgeons(res.data || []);
-        } catch (error) {
-            console.error('Error searching doctors:', error);
-            setSurgeons([]);
-        } finally {
-            setSearchingSurgeons(false);
-        }
-    };
-
-    useEffect(() => {
-        updateRoomOptions(roomSearch);
-
-        if (formData.roomId) {
-            const availableIds = new Set(getAvailableRooms().map((r) => Number(r.id)));
-            if (!availableIds.has(Number(formData.roomId))) {
-                setFormData((prev) => ({ ...prev, roomId: '', roomName: '' }));
-            }
+        const q = roomSearch.toLowerCase();
+        setRooms(available.filter(r =>
+            !q || r.roomNumber?.toLowerCase().includes(q) || r.roomType?.toLowerCase().includes(q)
+        ));
+        if (form.roomId) {
+            const ids = new Set(available.map(r => Number(r.id)));
+            if (!ids.has(Number(form.roomId))) setForm(f => ({ ...f, roomId: '', roomName: '' }));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formData.scheduledStart, formData.scheduledEnd, dayBookings, allRooms]);
+    }, [form.scheduledStart, form.scheduledEnd, dayBookings, allRooms]);
 
-    const handlePatientSelect = (patient) => {
-        setFormData({
-            ...formData,
-            patientId: patient.id ?? '',
-            patientName: patient.name || patient.firstName + ' ' + patient.lastName || '',
-            patientMrn: patient.mrn || '',
-        });
-        setPatientSearch('');
-        setShowPatientDropdown(false);
-        setPatients([]);
+    const getAvailableRooms = () => {
+        const s = form.scheduledStart ? new Date(form.scheduledStart) : null;
+        const e = form.scheduledEnd ? new Date(form.scheduledEnd) : null;
+        if (!s || !e || Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return allRooms;
+        const active = dayBookings.filter(b => !['CANCELLED', 'COMPLETED'].includes(b.status));
+        return allRooms.filter(room =>
+            !active.some(b => {
+                if (Number(b.roomId) !== Number(room.id)) return false;
+                const bs = new Date(b.scheduledStart), be = new Date(b.scheduledEnd);
+                return !Number.isNaN(bs.getTime()) && overlapsWithBuffer(s, e, bs, be, 30);
+            })
+        );
     };
 
-    const handleSurgeonSelect = (surgeon) => {
-        setFormData({
-            ...formData,
-            surgeonId: surgeon.id || '',
-            surgeonName: surgeon.name || surgeon.firstName + ' ' + surgeon.lastName || '',
-        });
-        setSurgeonSearch('');
-        setShowSurgeonDropdown(false);
-        setSurgeons([]);
+    const searchPatients = async (q) => {
+        if (q.length < 2) { setPatients([]); return; }
+        setSearchingPatients(true);
+        try {
+            const res = await getHmsPatients(q);
+            setPatients(res.data || []);
+        } catch { setPatients([]); } finally { setSearchingPatients(false); }
     };
 
-    const handleRoomSelect = (room) => {
-        setFormData({
-            ...formData,
-            roomId: room.id ?? '',
-            roomName: room.roomNumber || '',
-        });
-        setRoomSearch('');
-        setShowRoomDropdown(false);
-        setRooms([]);
+    const searchSurgeons = async (q) => {
+        if (q.length < 2) { setSurgeons([]); return; }
+        setSearchingSurgeons(true);
+        try {
+            const res = await getHmsDoctors(q, specialization || undefined);
+            setSurgeons(res.data || []);
+        } catch { setSurgeons([]); } finally { setSearchingSurgeons(false); }
     };
 
-    const handlePatientSearchChange = (e) => {
-        const value = e.target.value;
-        setPatientSearch(value);
-        setShowPatientDropdown(true);
-        searchPatients(value);
+    const handlePatientSelect = (p) => {
+        setForm(f => ({
+            ...f,
+            patientId: p.id,
+            patientName: p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+            patientMrn: p.mrn || '',
+        }));
+        setPatientSearch(''); setShowPatientDrop(false); setPatients([]);
     };
 
-    const handleSurgeonSearchChange = (e) => {
-        const value = e.target.value;
-        setSurgeonSearch(value);
-        setShowSurgeonDropdown(true);
-        searchSurgeons(value);
+    const handleSurgeonSelect = (s) => {
+        setForm(f => ({
+            ...f,
+            surgeonId: s.id || s.userId || '',
+            surgeonName: s.name || `${s.firstName || ''} ${s.lastName || ''}`.trim(),
+        }));
+        setSurgeonSearch(''); setShowSurgeonDrop(false); setSurgeons([]);
     };
 
-    const handleRoomSearchChange = (e) => {
-        const value = e.target.value;
-        setRoomSearch(value);
-        setShowRoomDropdown(true);
-        updateRoomOptions(value);
-    };
-
-    const handleKitSearchChange = (e) => {
-        const value = e.target.value;
-        setKitSearch(value);
-        setShowKitDropdown(true);
-        updateKitOptions(value);
+    const handleRoomSelect = (r) => {
+        setForm(f => ({ ...f, roomId: r.id, roomName: r.roomNumber || '' }));
+        setRoomSearch(''); setShowRoomDrop(false);
     };
 
     const handleAddKit = (kit) => {
-        setSelectedKits([...selectedKits, {
-            id: kit.id,
-            name: kit.name,
-            quantity: 1,
-            unitPrice: kit.price || 0,
-        }]);
-        setKitSearch('');
-        setShowKitDropdown(false);
-        updateKitOptions('');
-    };
-
-    const handleRemoveKit = (kitId) => {
-        setSelectedKits(selectedKits.filter((k) => k.id !== kitId));
-    };
-
-    const handleKitQuantityChange = (kitId, quantity) => {
-        setSelectedKits(
-            selectedKits.map((k) =>
-                k.id === kitId ? { ...k, quantity: Math.max(1, Number(quantity)) } : k
-            )
-        );
-    };
-
-    const handleKitPriceChange = (kitId, price) => {
-        setSelectedKits(
-            selectedKits.map((k) =>
-                k.id === kitId ? { ...k, unitPrice: Math.max(0, Number(price)) } : k
-            )
-        );
+        if (selectedKits.find(k => k.id === kit.id)) return;
+        setSelectedKits(prev => [...prev, { id: kit.id, name: kit.name, quantity: 1, unitPrice: kit.price || 0 }]);
+        setKitSearch(''); setShowKitDrop(false);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!form.patientId) { setError('Please select a patient'); return; }
+        if (!form.roomId) { setError('Please select a room'); return; }
+        if (!form.surgeonId) { setError('Please select a surgeon'); return; }
+
         setLoading(true);
         setError(null);
-
         try {
-            if (!formData.patientId) {
-                setError('Please select a patient');
-                return;
-            }
-            if (!formData.roomId) {
-                setError('Please select a room');
-                return;
-            }
-            if (!formData.surgeonId) {
-                setError('Please select a surgeon');
-                return;
-            }
-
             const payload = {
-                ...formData,
-                patientId: Number(formData.patientId),
-                roomId: Number(formData.roomId),
-                procedureCharge: formData.procedureCharge ? Number(formData.procedureCharge) : null,
+                ...form,
+                patientId: Number(form.patientId),
+                roomId: Number(form.roomId),
+                procedureCharge: form.procedureCharge ? Number(form.procedureCharge) : null,
             };
 
             const res = await createBooking(payload);
@@ -603,424 +511,342 @@ function CreateBookingModal({ onClose, onSuccess, prefilled = null }) {
                     billable: true,
                 });
             }
-
             onSuccess();
-        } catch (error) {
-            setError(error.response?.data?.message || 'Failed to create booking');
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to create booking');
         } finally {
             setLoading(false);
         }
     };
 
+    const filteredKits = allKits.filter(k =>
+        !kitSearch || k.name?.toLowerCase().includes(kitSearch.toLowerCase()) || k.code?.toLowerCase().includes(kitSearch.toLowerCase())
+    );
+
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                <div className="p-6 border-b flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-black">Create Booking</h2>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                {/* Modal header */}
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+                    <h2 className="text-lg font-bold text-gray-900">New OT Booking</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                <form onSubmit={handleSubmit} className="overflow-y-auto px-6 py-5 space-y-5 flex-1">
                     {error && (
-                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                            <XCircle size={16} className="flex-shrink-0" />
                             {error}
                         </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4">
-                        {/* Patient Search */}
-                        <div className="col-span-2 relative">
-                            <label className="block text-sm font-semibold text-black mb-2">Search Patient</label>
-                            <div className="relative">
-                                <div className="absolute left-3 top-3 text-gray-400">
-                                    <Search size={18} />
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder="Search by name or MRN..."
-                                    value={patientSearch}
-                                    onChange={handlePatientSearchChange}
-                                    onFocus={() => setShowPatientDropdown(true)}
-                                    className="w-full border rounded px-10 py-2 text-black"
-                                />
-                                {searchingPatients && (
-                                    <div className="absolute right-3 top-3">
-                                        <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent"></div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {showPatientDropdown && patients.length > 0 && (
-                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
-                                    {patients.map((patient) => (
-                                        <button
-                                            key={patient.id}
-                                            type="button"
-                                            onClick={() => handlePatientSelect(patient)}
-                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0 text-black"
-                                        >
-                                            <p className="font-semibold">{patient.name || `${patient.firstName} ${patient.lastName}`}</p>
-                                            <p className="text-xs text-gray-600">MRN: {patient.mrn} | Age: {patient.age}</p>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            {showPatientDropdown && patientSearch && patients.length === 0 && !searchingPatients && (
-                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 p-3 text-gray-600 text-sm">
-                                    No patients found
-                                </div>
-                            )}
-                        </div>
-
-                        {formData.patientId && (
-                            <>
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Patient Name</label>
-                                    <p className="border rounded px-3 py-2 bg-gray-50 text-black">{formData.patientName}</p>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Patient MRN</label>
-                                    <p className="border rounded px-3 py-2 bg-gray-50 text-black">{formData.patientMrn}</p>
-                                </div>
-                            </>
+                    {/* Patient search */}
+                    <FormSection title="Patient">
+                        <SearchField
+                            placeholder="Search by name, MRN or phone..."
+                            value={patientSearch}
+                            onChange={v => { setPatientSearch(v); setShowPatientDrop(true); searchPatients(v); }}
+                            onFocus={() => setShowPatientDrop(true)}
+                            loading={searchingPatients}
+                        />
+                        {showPatientDrop && patients.length > 0 && (
+                            <Dropdown>
+                                {patients.map(p => (
+                                    <DropdownItem key={p.id} onClick={() => handlePatientSelect(p)}>
+                                        <span className="font-medium text-gray-900">
+                                            {p.name || `${p.firstName} ${p.lastName}`}
+                                        </span>
+                                        <span className="text-xs text-gray-500 mt-0.5">
+                                            MRN: {p.mrn} {p.age != null ? `· Age: ${p.age}` : ''}
+                                        </span>
+                                    </DropdownItem>
+                                ))}
+                            </Dropdown>
                         )}
+                        {form.patientId && (
+                            <SelectedTag label={form.patientName} sub={`MRN: ${form.patientMrn}`} onClear={() => setForm(f => ({ ...f, patientId: '', patientName: '', patientMrn: '' }))} />
+                        )}
+                    </FormSection>
 
-                        {/* Procedure */}
-                        <input
-                            type="text"
-                            placeholder="Procedure Name"
-                            value={formData.procedureName}
-                            onChange={(e) => setFormData({ ...formData, procedureName: e.target.value.slice(0, 300) })}
-                            maxLength={300}
-                            className="border rounded px-3 py-2 text-black"
-                            required
-                        />
-
-                        <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="Procedure Charge (optional)"
-                            value={formData.procedureCharge}
-                            onChange={(e) => setFormData({ ...formData, procedureCharge: e.target.value })}
-                            className="border rounded px-3 py-2 text-black"
-                        />
-
-                        {/* Room Search */}
-                        <div className="relative">
-                            <label className="block text-sm font-semibold text-black mb-2">Search Room</label>
-                            {roomError && (
-                                <div className={`mb-2 text-xs p-2 rounded flex items-center gap-2 ${
-                                    retryingRooms ? 'text-blue-600 bg-blue-50' : 'text-red-600 bg-red-50'
-                                }`}>
-                                    {retryingRooms && (
-                                        <div className="animate-spin h-3 w-3 border-2 border-blue-600 rounded-full border-t-transparent"></div>
-                                    )}
-                                    {roomError}
-                                </div>
-                            )}
-                            <div className="relative">
-                                <div className="absolute left-3 top-3 text-gray-400">
-                                    <Search size={18} />
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder={roomError ? 'Enter room name manually...' : 'Search OT room...'}
-                                    value={roomSearch}
-                                    onChange={handleRoomSearchChange}
-                                    onFocus={() => {
-                                        if (!roomError) {
-                                            setShowRoomDropdown(true);
-                                            updateRoomOptions(roomSearch);
-                                        }
-                                    }}
-                                    className="w-full border rounded px-10 py-2 text-black"
-                                />
-                                {loadingRooms && (
-                                    <div className="absolute right-3 top-3">
-                                        <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent"></div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {!roomError && showRoomDropdown && rooms.length > 0 && (
-                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
-                                    {rooms.map((room) => (
-                                        <button
-                                            key={room.id}
-                                            type="button"
-                                            onClick={() => handleRoomSelect(room)}
-                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0 text-black"
-                                        >
-                                            <p className="font-semibold">{room.roomNumber}</p>
-                                            <p className="text-xs text-gray-600">Type: {room.roomType}</p>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            {!roomError && showRoomDropdown && rooms.length === 0 && !loadingRooms && (
-                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 p-3 text-gray-600 text-sm">
-                                    No rooms found
-                                </div>
-                            )}
+                    {/* Procedure */}
+                    <FormSection title="Procedure">
+                        <div className="grid grid-cols-2 gap-3">
+                            <input
+                                className="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Procedure name *"
+                                value={form.procedureName}
+                                onChange={e => setForm(f => ({ ...f, procedureName: e.target.value.slice(0, 300) }))}
+                                required
+                            />
+                            <input
+                                className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                type="number" step="0.01" min="0"
+                                placeholder="Procedure charge (₹)"
+                                value={form.procedureCharge}
+                                onChange={e => setForm(f => ({ ...f, procedureCharge: e.target.value }))}
+                            />
                         </div>
+                    </FormSection>
 
-                        {formData.roomId && (
+                    {/* Schedule */}
+                    <FormSection title="Schedule">
+                        <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs font-semibold text-gray-600 mb-1">Selected Room</label>
-                                <p className="border rounded px-3 py-2 bg-gray-50 text-black">{formData.roomName}</p>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Start *</label>
+                                <input
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    type="datetime-local"
+                                    value={form.scheduledStart}
+                                    onChange={e => setForm(f => ({ ...f, scheduledStart: e.target.value }))}
+                                    required
+                                />
                             </div>
-                        )}
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">End *</label>
+                                <input
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    type="datetime-local"
+                                    value={form.scheduledEnd}
+                                    onChange={e => setForm(f => ({ ...f, scheduledEnd: e.target.value }))}
+                                    required
+                                />
+                            </div>
+                        </div>
+                    </FormSection>
 
-                        {/* Specialization Filter */}
-                        <div>
-                            <label className="block text-sm font-semibold text-black mb-2">Doctor Specialization (Optional)</label>
+                    {/* Room */}
+                    <FormSection title="OT Room">
+                        {roomError && (
+                            <p className="text-xs text-amber-600 mb-1">{roomError}</p>
+                        )}
+                        <SearchField
+                            placeholder={roomError ? 'Enter room name manually...' : 'Search OT room...'}
+                            value={roomSearch}
+                            onChange={v => {
+                                setRoomSearch(v);
+                                if (!roomError) setShowRoomDrop(true);
+                                const q = v.toLowerCase();
+                                setRooms(getAvailableRooms().filter(r =>
+                                    !q || r.roomNumber?.toLowerCase().includes(q)
+                                ));
+                            }}
+                            onFocus={() => { if (!roomError) setShowRoomDrop(true); }}
+                            loading={loadingRooms}
+                        />
+                        {!roomError && showRoomDrop && rooms.length > 0 && (
+                            <Dropdown>
+                                {rooms.map(r => (
+                                    <DropdownItem key={r.id} onClick={() => handleRoomSelect(r)}>
+                                        <span className="font-medium text-gray-900">{r.roomNumber}</span>
+                                        <span className="text-xs text-gray-500">{r.roomType}</span>
+                                    </DropdownItem>
+                                ))}
+                            </Dropdown>
+                        )}
+                        {form.roomId && (
+                            <SelectedTag label={form.roomName} sub="OT Room" onClear={() => setForm(f => ({ ...f, roomId: '', roomName: '' }))} />
+                        )}
+                    </FormSection>
+
+                    {/* Surgeon */}
+                    <FormSection title="Surgeon">
+                        <div className="mb-2">
                             <select
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                                 value={specialization}
-                                onChange={(e) => {
-                                    setSpecialization(e.target.value);
-                                    setSurgeons([]);
-                                    setSurgeonSearch('');
-                                }}
-                                className="w-full border rounded px-3 py-2 text-black bg-white"
+                                onChange={e => { setSpecialization(e.target.value); setSurgeons([]); setSurgeonSearch(''); }}
                             >
                                 <option value="">All Specializations</option>
-                                <option value="Cardiology">Cardiology</option>
-                                <option value="Orthopedics">Orthopedics</option>
-                                <option value="Neurosurgery">Neurosurgery</option>
-                                <option value="General Surgery">General Surgery</option>
-                                <option value="ENT">ENT</option>
-                                <option value="Ophthalmology">Ophthalmology</option>
-                                <option value="Urology">Urology</option>
-                                <option value="Oncology">Oncology</option>
+                                <option>Cardiology</option>
+                                <option>Orthopedics</option>
+                                <option>Neurosurgery</option>
+                                <option>General Surgery</option>
+                                <option>ENT</option>
+                                <option>Ophthalmology</option>
+                                <option>Urology</option>
+                                <option>Oncology</option>
                             </select>
                         </div>
+                        <SearchField
+                            placeholder="Search by surgeon name..."
+                            value={surgeonSearch}
+                            onChange={v => { setSurgeonSearch(v); setShowSurgeonDrop(true); searchSurgeons(v); }}
+                            onFocus={() => setShowSurgeonDrop(true)}
+                            loading={searchingSurgeons}
+                        />
+                        {showSurgeonDrop && surgeons.length > 0 && (
+                            <Dropdown>
+                                {surgeons.map(s => (
+                                    <DropdownItem key={s.id || s.userId} onClick={() => handleSurgeonSelect(s)}>
+                                        <span className="font-medium text-gray-900">
+                                            {s.name || `${s.firstName} ${s.lastName}`}
+                                        </span>
+                                        <span className="text-xs text-gray-500">
+                                            {s.specialization && <span className="text-blue-600 mr-1">{s.specialization}</span>}
+                                            {s.email}
+                                        </span>
+                                    </DropdownItem>
+                                ))}
+                            </Dropdown>
+                        )}
+                        {form.surgeonId && (
+                            <SelectedTag label={form.surgeonName} sub="Surgeon" onClear={() => setForm(f => ({ ...f, surgeonId: '', surgeonName: '' }))} />
+                        )}
+                    </FormSection>
 
-                        {/* Surgeon Search */}
-                        <div className="relative">
-                            <label className="block text-sm font-semibold text-black mb-2">Search Surgeon</label>
-                            <div className="relative">
-                                <div className="absolute left-3 top-3 text-gray-400">
-                                    <Search size={18} />
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder="Search by surgeon name..."
-                                    value={surgeonSearch}
-                                    onChange={handleSurgeonSearchChange}
-                                    onFocus={() => setShowSurgeonDropdown(true)}
-                                    className="w-full border rounded px-10 py-2 text-black"
-                                />
-                                {searchingSurgeons && (
-                                    <div className="absolute right-3 top-3">
-                                        <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent"></div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {showSurgeonDropdown && surgeons.length > 0 && (
-                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
-                                    {surgeons.map((surgeon) => (
-                                        <button
-                                            key={surgeon.id}
-                                            type="button"
-                                            onClick={() => handleSurgeonSelect(surgeon)}
-                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0 text-black"
-                                        >
-                                            <p className="font-semibold">{surgeon.name || `${surgeon.firstName} ${surgeon.lastName}`}</p>
-                                            {surgeon.specialization && <p className="text-xs text-blue-600">{surgeon.specialization}</p>}
-                                            <p className="text-xs text-gray-600">{surgeon.email}</p>
+                    {/* Inventory Kits */}
+                    <FormSection title="Inventory Kits">
+                        {kitError && (
+                            <p className="text-xs text-amber-600 mb-1">{kitError}</p>
+                        )}
+                        <SearchField
+                            placeholder={kitError ? 'Enter kit name...' : 'Search kit...'}
+                            value={kitSearch}
+                            onChange={v => { setKitSearch(v); if (!kitError) setShowKitDrop(true); }}
+                            onFocus={() => { if (!kitError) setShowKitDrop(true); }}
+                            loading={loadingKits}
+                        />
+                        {!kitError && showKitDrop && filteredKits.length > 0 && (
+                            <Dropdown>
+                                {filteredKits.map(k => (
+                                    <DropdownItem key={k.id} onClick={() => handleAddKit(k)}>
+                                        <span className="font-medium text-gray-900">{k.name}</span>
+                                        {k.code && <span className="text-xs text-gray-500">Code: {k.code}</span>}
+                                    </DropdownItem>
+                                ))}
+                            </Dropdown>
+                        )}
+                        {kitError && kitSearch && (
+                            <button
+                                type="button"
+                                onClick={() => handleAddKit({ id: `manual_${Date.now()}`, name: kitSearch, price: 0 })}
+                                className="mt-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                                + Add "{kitSearch}" as custom item
+                            </button>
+                        )}
+                        {selectedKits.length > 0 && (
+                            <div className="mt-3 space-y-2">
+                                {selectedKits.map(kit => (
+                                    <div key={kit.id} className="flex items-center gap-2 bg-gray-50 rounded-lg p-2 border border-gray-200">
+                                        <span className="flex-1 text-sm font-medium text-gray-900 truncate">{kit.name}</span>
+                                        <input
+                                            type="number" min="1" value={kit.quantity}
+                                            onChange={e => setSelectedKits(kits => kits.map(k => k.id === kit.id ? { ...k, quantity: Math.max(1, Number(e.target.value)) } : k))}
+                                            className="w-14 border border-gray-300 rounded px-2 py-1 text-xs text-center"
+                                        />
+                                        <span className="text-xs text-gray-500">qty</span>
+                                        <input
+                                            type="number" step="0.01" min="0" value={kit.unitPrice}
+                                            onChange={e => setSelectedKits(kits => kits.map(k => k.id === kit.id ? { ...k, unitPrice: Math.max(0, Number(e.target.value)) } : k))}
+                                            className="w-20 border border-gray-300 rounded px-2 py-1 text-xs text-center"
+                                        />
+                                        <span className="text-xs text-gray-500">₹</span>
+                                        <button type="button" onClick={() => setSelectedKits(kits => kits.filter(k => k.id !== kit.id))}>
+                                            <Trash2 size={14} className="text-red-500 hover:text-red-700" />
                                         </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            {showSurgeonDropdown && surgeonSearch && surgeons.length === 0 && !searchingSurgeons && (
-                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 p-3 text-gray-600 text-sm">
-                                    No surgeons found
-                                </div>
-                            )}
-                        </div>
-
-                        {formData.surgeonId && (
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-600 mb-1">Selected Surgeon</label>
-                                <p className="border rounded px-3 py-2 bg-gray-50 text-black">{formData.surgeonName}</p>
+                                    </div>
+                                ))}
                             </div>
                         )}
+                    </FormSection>
 
-                        {/* Time slots */}
-                        <div>
-                            <label className="block text-sm font-semibold text-black mb-2">Scheduled Start</label>
-                            <input
-                                type="datetime-local"
-                                value={formData.scheduledStart}
-                                onChange={(e) => setFormData({ ...formData, scheduledStart: e.target.value })}
-                                className="w-full border rounded px-3 py-2 text-black"
-                                required
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-semibold text-black mb-2">Scheduled End</label>
-                            <input
-                                type="datetime-local"
-                                value={formData.scheduledEnd}
-                                onChange={(e) => setFormData({ ...formData, scheduledEnd: e.target.value })}
-                                className="w-full border rounded px-3 py-2 text-black"
-                                required
-                            />
-                        </div>
-
-                        {/* Inventory Kits - Dropdown Search like Room */}
-                        <div className="col-span-2 relative">
-                            <label className="block text-sm font-semibold text-black mb-2">
-                                Inventory Kits {kitError && <span className="text-xs text-gray-600">(Manual entry)</span>}
-                            </label>
-                            {kitError && (
-                                <div className={`mb-2 text-xs p-2 rounded flex items-center gap-2 ${
-                                    retryingKits ? 'text-blue-600 bg-blue-50' : 'text-amber-600 bg-amber-50'
-                                }`}>
-                                    {retryingKits && (
-                                        <div className="animate-spin h-3 w-3 border-2 border-blue-600 rounded-full border-t-transparent"></div>
-                                    )}
-                                    {kitError}
-                                </div>
-                            )}
-                            <div className="relative">
-                                <div className="absolute left-3 top-3 text-gray-400">
-                                    <Search size={18} />
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder={kitError ? 'Enter kit name...' : 'Search kit...'}
-                                    value={kitSearch}
-                                    onChange={handleKitSearchChange}
-                                    onFocus={() => {
-                                        if (!kitError) {
-                                            setShowKitDropdown(true);
-                                            updateKitOptions(kitSearch);
-                                        }
-                                    }}
-                                    className="w-full border rounded px-10 py-2 text-black"
-                                />
-                                {loadingKits && (
-                                    <div className="absolute right-3 top-3">
-                                        <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent"></div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {!kitError && showKitDropdown && kits.length > 0 && (
-                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 max-h-48 overflow-y-auto">
-                                    {kits.map((kit) => (
-                                        <button
-                                            key={kit.id}
-                                            type="button"
-                                            onClick={() => handleAddKit(kit)}
-                                            className="w-full text-left px-4 py-2 hover:bg-blue-50 border-b last:border-b-0 text-black"
-                                        >
-                                            <p className="font-semibold">{kit.name}</p>
-                                            <p className="text-xs text-gray-600">Code: {kit.code}</p>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            {!kitError && showKitDropdown && kits.length === 0 && !loadingKits && (
-                                <div className="absolute top-full mt-1 w-full bg-white border rounded shadow-lg z-10 p-3 text-gray-600 text-sm">
-                                    No kits found
-                                </div>
-                            )}
-
-                            {kitError && kitSearch && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const newId = 'manual_' + Date.now();
-                                        handleAddKit({
-                                            id: newId,
-                                            name: kitSearch,
-                                            code: '',
-                                        });
-                                    }}
-                                    className="mt-2 text-sm text-blue-600 hover:text-blue-800 underline"
-                                >
-                                    + Add "{kitSearch}" as custom kit
-                                </button>
-                            )}
-
-                            {selectedKits.length > 0 && (
-                                <div className="space-y-2 mt-3 bg-gray-50 p-3 rounded">
-                                    {selectedKits.map((kit) => (
-                                        <div key={kit.id} className="flex gap-2 items-center bg-white p-2 rounded border">
-                                            <div className="flex-1">
-                                                <p className="text-sm font-semibold text-black">{kit.name}</p>
-                                            </div>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                value={kit.quantity}
-                                                onChange={(e) => handleKitQuantityChange(kit.id, e.target.value)}
-                                                className="w-16 border rounded px-2 py-1 text-black text-sm"
-                                            />
-                                            <span className="text-xs text-black">Qty</span>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                value={kit.unitPrice}
-                                                onChange={(e) => handleKitPriceChange(kit.id, e.target.value)}
-                                                className="w-20 border rounded px-2 py-1 text-black text-sm"
-                                            />
-                                            <span className="text-xs text-black">₹</span>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemoveKit(kit.id)}
-                                                className="text-red-600 hover:text-red-800"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Notes */}
-                        <div className="col-span-2">
-                            <label className="block text-sm font-semibold text-black mb-2">Notes</label>
-                            <textarea
-                                placeholder="Notes"
-                                value={formData.notes}
-                                onChange={(e) => setFormData({ ...formData, notes: e.target.value.slice(0, 1000) })}
-                                maxLength={1000}
-                                className="w-full border rounded px-3 py-2 text-black"
-                                rows="2"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex gap-4 pt-4">
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-                        >
-                            {loading ? 'Creating...' : 'Create Booking'}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 rounded-lg transition"
-                        >
-                            Cancel
-                        </button>
-                    </div>
+                    {/* Notes */}
+                    <FormSection title="Notes">
+                        <textarea
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                            rows={2}
+                            placeholder="Clinical notes, special requirements..."
+                            value={form.notes}
+                            onChange={e => setForm(f => ({ ...f, notes: e.target.value.slice(0, 1000) }))}
+                        />
+                    </FormSection>
                 </form>
+
+                {/* Modal footer */}
+                <div className="px-6 py-4 border-t border-gray-100 flex gap-3 flex-shrink-0">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex-1 border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 rounded-lg transition-colors text-sm"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        form="booking-form"
+                        disabled={loading}
+                        onClick={handleSubmit}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 rounded-lg transition-colors text-sm"
+                    >
+                        {loading ? 'Creating...' : 'Create Booking'}
+                    </button>
+                </div>
             </div>
+        </div>
+    );
+}
+
+// ─── Shared small components ──────────────────────────────────────────────────
+
+function FormSection({ title, children }) {
+    return (
+        <div>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{title}</h3>
+            <div className="relative">{children}</div>
+        </div>
+    );
+}
+
+function SearchField({ placeholder, value, onChange, onFocus, loading }) {
+    return (
+        <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input
+                type="text"
+                placeholder={placeholder}
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                onFocus={onFocus}
+                className="w-full border border-gray-300 rounded-lg pl-9 pr-9 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {loading && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent" />
+                </div>
+            )}
+        </div>
+    );
+}
+
+function Dropdown({ children }) {
+    return (
+        <div className="absolute top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+            {children}
+        </div>
+    );
+}
+
+function DropdownItem({ onClick, children }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-gray-100 last:border-b-0 flex flex-col gap-0.5"
+        >
+            {children}
+        </button>
+    );
+}
+
+function SelectedTag({ label, sub, onClear }) {
+    return (
+        <div className="mt-2 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+            <div>
+                <p className="text-sm font-semibold text-blue-900">{label}</p>
+                {sub && <p className="text-xs text-blue-600">{sub}</p>}
+            </div>
+            <button type="button" onClick={onClear} className="text-blue-400 hover:text-blue-700 text-lg leading-none ml-3">✕</button>
         </div>
     );
 }

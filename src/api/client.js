@@ -16,12 +16,8 @@ const RETRY_DELAY = 1000;
 const shouldRetry = (error, config) => {
     const retryCount = config.__retryCount || 0;
     if (retryCount >= MAX_RETRIES) return false;
-
     const status = error.response?.status;
-    const isRetryableStatus = [502, 503, 504].includes(status);
-    const isNetworkError = !error.response || error.code === 'ECONNABORTED';
-
-    return isRetryableStatus || isNetworkError;
+    return [502, 503, 504].includes(status) || !error.response || error.code === 'ECONNABORTED';
 };
 
 api.interceptors.response.use(
@@ -45,7 +41,6 @@ api.interceptors.response.use(
         if (shouldRetry(error, config)) {
             config.__retryCount = (config.__retryCount || 0) + 1;
             const delay = RETRY_DELAY * Math.pow(2, config.__retryCount - 1);
-
             await new Promise(resolve => setTimeout(resolve, delay));
             return api(config);
         }
@@ -54,9 +49,11 @@ api.interceptors.response.use(
     }
 );
 
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 export const getMyProfile = () => api.get('/api/user/me');
 export const logout = () => api.post('/api/auth/logout');
 
+// ─── OT Bookings ──────────────────────────────────────────────────────────────
 export const createBooking = (data) => api.post('/api/ot/bookings', data);
 export const getBookings = (params) => api.get('/api/ot/bookings', { params });
 export const getBooking = (id) => api.get(`/api/ot/bookings/${id}`);
@@ -67,32 +64,34 @@ export const endBooking = (id) => api.patch(`/api/ot/bookings/${id}/end`);
 export const sanitizeBooking = (id) => api.patch(`/api/ot/bookings/${id}/sanitize`);
 export const cancelBooking = (id) => api.patch(`/api/ot/bookings/${id}/cancel`);
 
+// ─── Consumption ──────────────────────────────────────────────────────────────
 export const getConsumption = (bookingId) => api.get(`/api/ot/bookings/${bookingId}/consumption`);
 export const addConsumptionItem = (bookingId, data) => api.post(`/api/ot/bookings/${bookingId}/consumption`, data);
-export const deleteConsumptionItem = (itemId) => api.delete(`/api/ot/consumption/${itemId}`);
+// Correct path: /api/ot/bookings/consumption/{itemId}
+export const deleteConsumptionItem = (itemId) => api.delete(`/api/ot/bookings/consumption/${itemId}`);
 
+// ─── HMS Proxy ────────────────────────────────────────────────────────────────
 export const getHmsRooms = () => api.get('/api/proxy/hms/rooms');
+
+// All active admissions in the hospital (any room type) — for OT booking eligibility
+export const getActiveAdmissions = () => api.get('/api/proxy/hms/admissions');
+
+// Admissions already in OT rooms — for OT board / Schedules view
 export const getOtAdmissions = () => api.get('/api/proxy/hms/ot-admissions');
+
 export const getHmsPatients = (search) => api.get('/api/proxy/hms/patients', { params: { search } });
-export const getHmsDoctors = (search, specialization) => api.get('/api/proxy/hms/doctors', { params: { search, specialization } });
-export const getDirectorySurgeons = (search) => api.get('/api/proxy/directory/surgeons', { params: { search } });
-export const getInventoryKits = async () => {
-    console.log('[DEBUG Frontend] Calling getInventoryKits');
-    console.log('[DEBUG Frontend] API base URL:', API_BASE_URL);
-    console.log('[DEBUG Frontend] Full URL:', API_BASE_URL + '/api/proxy/inventory/kits');
-    try {
-        const response = await api.get('/api/proxy/inventory/kits');
-        console.log('[DEBUG Frontend] Success response:', response);
-        return response;
-    } catch (error) {
-        console.error('[DEBUG Frontend] Error fetching kits:');
-        console.error('[DEBUG Frontend] Error status:', error.response?.status);
-        console.error('[DEBUG Frontend] Error data:', error.response?.data);
-        console.error('[DEBUG Frontend] Error headers:', error.response?.headers);
-        console.error('[DEBUG Frontend] Full error:', error);
-        throw error;
-    }
-};
+export const getHmsDoctors = (search, specialization) =>
+    api.get('/api/proxy/hms/doctors', { params: { search, specialization } });
+
+export const movePatientToOT = (admissionId, data) =>
+    api.patch(`/api/proxy/hms/admissions/${admissionId}/move-to-ot`, data);
+
+// ─── Directory Proxy ──────────────────────────────────────────────────────────
+export const getDirectorySurgeons = (search) =>
+    api.get('/api/proxy/directory/surgeons', { params: { search } });
+
+// ─── Inventory Proxy ──────────────────────────────────────────────────────────
+export const getInventoryKits = () => api.get('/api/proxy/inventory/kits');
 export const createInventoryKit = (data) => api.post('/api/proxy/inventory/kits', data);
 export const updateInventoryKit = (id, data) => api.put(`/api/proxy/inventory/kits/${id}`, data);
 export const deleteInventoryKit = (id) => api.delete(`/api/proxy/inventory/kits/${id}`);

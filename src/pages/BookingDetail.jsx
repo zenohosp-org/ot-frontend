@@ -295,15 +295,10 @@ function AddConsumptionModal({ bookingId, onClose, onSuccess }) {
 
         const fetchKits = async () => {
             setLoadingKits(true);
-            console.log('[DEBUG BookingDetail] Fetching kits for itemType:', formData.itemType);
             try {
                 const res = await getInventoryKits();
-                console.log('[DEBUG BookingDetail] Kits response:', res);
                 setKits(res.data || []);
             } catch (e) {
-                console.error('[DEBUG BookingDetail] Error fetching kits:', e);
-                console.error('[DEBUG BookingDetail] Error status:', e.response?.status);
-                console.error('[DEBUG BookingDetail] Error data:', e.response?.data);
                 setKits([]);
             } finally {
                 setLoadingKits(false);

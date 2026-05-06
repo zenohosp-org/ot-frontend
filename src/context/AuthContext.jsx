@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useState, useCallback, useEffect } from 'react';
 import { getMyProfile, logout as apiLogout } from '../api/client';
+import api from '../api/client';
 
-const AuthContext = createContext(null);
+export const AuthContext = createContext(null);
 const LOGOUT_FLAG_KEY = 'sso_logout_flag';
 
 export function AuthProvider({ children }) {
@@ -10,11 +11,14 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         if (import.meta.env.VITE_DEV_MOCK_AUTH === 'true') {
-            setUser({
-                hospitalId: import.meta.env.VITE_MOCK_HOSPITAL_ID || 'e1b924ba-3cac-426d-a775-3c978fd95490',
-                modules: ['ot'],
-            });
-            setLoading(false);
+            const hospitalId = import.meta.env.VITE_MOCK_HOSPITAL_ID || 'e1b924ba-3cac-426d-a775-3c978fd95490';
+            // Obtain a real JWT cookie from the local backend so API calls work
+            api.post(`/api/auth/dev-login?hospitalId=${hospitalId}`)
+                .catch(() => {})
+                .finally(() => {
+                    setUser({ hospitalId, modules: ['ot'] });
+                    setLoading(false);
+                });
             return;
         }
 
@@ -130,4 +134,3 @@ export function AuthProvider({ children }) {
     );
 }
 
-export const useAuth = () => useContext(AuthContext);

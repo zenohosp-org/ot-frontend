@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { getBookings, getHmsRooms } from '../api/client';
 
 function isOtRoom(room) {
@@ -33,8 +32,8 @@ const STATUS_COLORS = {
 };
 
 export default function Schedules() {
-    const navigate = useNavigate();
     const [tab, setTab] = useState('rooms');
+    const [selectedRoom, setSelectedRoom] = useState(null);
     const [rooms, setRooms] = useState([]);
     const [bookings, setBookings] = useState([]);
     const [loadingRooms, setLoadingRooms] = useState(true);
@@ -60,9 +59,21 @@ export default function Schedules() {
         return () => clearInterval(interval);
     }, []);
 
-    const timelineColumns = rooms.length
-        ? rooms
-        : [...new Set(bookings.map((b) => b.roomId))].sort().map((id) => ({ id, roomNumber: id }));
+    const handleViewTimeline = (room) => {
+        setSelectedRoom(room);
+        setTab('timeline');
+    };
+
+    const handleClearRoom = () => {
+        setSelectedRoom(null);
+    };
+
+    const timelineColumns = useMemo(() => {
+        if (selectedRoom) return [selectedRoom];
+        return rooms.length
+            ? rooms
+            : [...new Set(bookings.map((b) => b.roomId))].sort().map((id) => ({ id, roomNumber: id }));
+    }, [rooms, bookings, selectedRoom]);
 
     const timeSlots = generateTimeSlots();
 
@@ -76,7 +87,7 @@ export default function Schedules() {
             </div>
 
             {tab === 'rooms' && (
-                <RoomCardGrid rooms={rooms} loading={loadingRooms} onSelectRoom={(room) => navigate(`/schedules/rooms/${room.id}`, { state: { room } })} />
+                <RoomList rooms={rooms} loading={loadingRooms} onViewTimeline={handleViewTimeline} />
             )}
 
             {tab === 'timeline' && (
@@ -84,7 +95,9 @@ export default function Schedules() {
                     columns={timelineColumns}
                     bookings={bookings}
                     loading={loadingBookings}
-                    timeSlots={generateTimeSlots()}
+                    selectedRoom={selectedRoom}
+                    timeSlots={timeSlots}
+                    onClearRoom={handleClearRoom}
                 />
             )}
         </div>
@@ -106,73 +119,100 @@ function TabButton({ label, active, onClick }) {
     );
 }
 
-function RoomCardGrid({ rooms, loading, onSelectRoom }) {
+function RoomList({ rooms, loading, onViewTimeline }) {
     if (loading) return <div className="text-black">Loading rooms...</div>;
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {rooms.map((room) => (
-                <div
-                    key={room.id}
-                    onClick={() => onSelectRoom(room)}
-                    className="bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer p-6 border border-gray-200"
-                >
-                    <div className="flex items-start justify-between mb-4">
-                        <h3 className="text-2xl font-bold text-black">{room.roomNumber}</h3>
-                        <div className={`w-3 h-3 rounded-full ${room.status === 'AVAILABLE' ? 'bg-green-500' : 'bg-amber-500'}`} />
-                    </div>
-                    <p className="text-sm text-gray-600 mb-2">Type: {room.roomType}</p>
-                    <p className="text-xs text-gray-500">Status: {room.status}</p>
-                </div>
-            ))}
+        <div className="bg-white rounded-lg shadow overflow-x-auto">
+            <table className="w-full">
+                <thead>
+                    <tr className="border-b bg-gray-50">
+                        <th className="px-6 py-3 text-left font-semibold text-black">Room</th>
+                        <th className="px-6 py-3 text-left font-semibold text-black">Type</th>
+                        <th className="px-6 py-3 text-left font-semibold text-black">Status</th>
+                        <th className="px-6 py-3 text-left font-semibold text-black">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rooms.map((room) => (
+                        <tr key={room.id} className="border-b hover:bg-gray-50">
+                            <td className="px-6 py-3 text-sm text-black">{room.roomNumber}</td>
+                            <td className="px-6 py-3 text-sm text-black">{room.roomType}</td>
+                            <td className="px-6 py-3 text-sm text-black">{room.status}</td>
+                            <td className="px-6 py-3 text-sm">
+                                <button
+                                    onClick={() => onViewTimeline(room)}
+                                    className="text-blue-600 hover:text-blue-800 font-medium"
+                                >
+                                    View Timeline
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
             {rooms.length === 0 && (
-                <div className="col-span-full text-center py-12 text-black">No OT rooms found</div>
+                <div className="p-6 text-black">No OT rooms found</div>
             )}
         </div>
     );
 }
 
-function Timeline({ columns, bookings, loading, timeSlots }) {
+function Timeline({ columns, bookings, loading, selectedRoom, timeSlots, onClearRoom }) {
     if (loading) return <div className="text-black">Loading timeline...</div>;
 
     return (
-        <div className="overflow-x-auto bg-white rounded-lg shadow">
-            <table className="w-full">
-                <thead>
-                    <tr className="border-b bg-gray-50">
-                        <th className="px-4 py-3 text-left font-semibold w-32 text-black">Time</th>
-                        {columns.map((room) => (
-                            <th key={room.id} className="px-4 py-3 text-left font-semibold border-l text-black">
-                                Room {room.roomNumber || room.id}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {timeSlots.map((slot, i) => (
-                        <tr key={i} className="border-b hover:bg-gray-50">
-                            <td className="px-4 py-2 font-medium text-sm bg-gray-50 text-black">{slot}</td>
-                            {columns.map((room) => {
-                                const booking = bookings.find(
-                                    (b) =>
-                                        b.roomId === room.id &&
-                                        isTimeInRange(slot, b.scheduledStart, b.scheduledEnd)
-                                );
-                                return (
-                                    <td key={`${room.id}-${i}`} className="px-4 py-2 border-l">
-                                        {booking && (
-                                            <div className={`p-2 rounded text-sm text-black ${STATUS_COLORS[booking.status] || 'bg-gray-100'}`}>
-                                                <div className="font-semibold">{booking.procedureName}</div>
-                                                <div className="text-xs">{booking.surgeonName}</div>
-                                            </div>
-                                        )}
-                                    </td>
-                                );
-                            })}
+        <div>
+            {selectedRoom && (
+                <div className="flex items-center gap-4 mb-4">
+                    <span className="text-black font-semibold">Room: {selectedRoom.roomNumber}</span>
+                    <button
+                        onClick={onClearRoom}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                        Show all rooms
+                    </button>
+                </div>
+            )}
+
+            <div className="overflow-x-auto bg-white rounded-lg shadow">
+                <table className="w-full">
+                    <thead>
+                        <tr className="border-b bg-gray-50">
+                            <th className="px-4 py-3 text-left font-semibold w-32 text-black">Time</th>
+                            {columns.map((room) => (
+                                <th key={room.id} className="px-4 py-3 text-left font-semibold border-l text-black">
+                                    Room {room.roomNumber || room.id}
+                                </th>
+                            ))}
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {timeSlots.map((slot, i) => (
+                            <tr key={i} className="border-b hover:bg-gray-50">
+                                <td className="px-4 py-2 font-medium text-sm bg-gray-50 text-black">{slot}</td>
+                                {columns.map((room) => {
+                                    const booking = bookings.find(
+                                        (b) =>
+                                            b.roomId === room.id &&
+                                            isTimeInRange(slot, b.scheduledStart, b.scheduledEnd)
+                                    );
+                                    return (
+                                        <td key={`${room.id}-${i}`} className="px-4 py-2 border-l">
+                                            {booking && (
+                                                <div className={`p-2 rounded text-sm text-black ${STATUS_COLORS[booking.status] || 'bg-gray-100'}`}>
+                                                    <div className="font-semibold">{booking.procedureName}</div>
+                                                    <div className="text-xs">{booking.surgeonName}</div>
+                                                </div>
+                                            )}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
