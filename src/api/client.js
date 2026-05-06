@@ -75,5 +75,10 @@ export const getOtAdmissions = () => api.get('/api/proxy/hms/ot-admissions');
 export const getHmsPatients = (search) => api.get('/api/proxy/hms/patients', { params: { search } });
 export const getDirectorySurgeons = (search) => api.get('/api/proxy/directory/surgeons', { params: { search } });
 export const getInventoryKits = () => api.get('/api/proxy/inventory/kits');
+export const createInventoryKit = (data) => api.post('/api/proxy/inventory/kits', data);
+export const updateInventoryKit = (id, data) => api.put(`/api/proxy/inventory/kits/${id}`, data);
+export const deleteInventoryKit = (id) => api.delete(`/api/proxy/inventory/kits/${id}`);
+export const consumeInventoryKit = (id, data) => api.post(`/api/proxy/inventory/kits/${id}/consume`, data);
+export const getInventoryKitConsumptions = () => api.get('/api/proxy/inventory/kits/consumptions');
 
 export default api;
