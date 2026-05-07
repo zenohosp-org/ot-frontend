@@ -3,9 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
     getBooking, getConsumption,
     confirmBooking, startBooking, endBooking, sanitizeBooking, cancelBooking,
-    addConsumptionItem, deleteConsumptionItem, getInventoryKits,
+    addConsumptionItem, deleteConsumptionItem, getInventoryKits, getPostOtRooms,
 } from '../api/client';
-import { ArrowLeft, Trash2, Plus, Clock, Activity, IndianRupee, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, Clock, Activity, IndianRupee, AlertTriangle, CheckCircle2, BedDouble } from 'lucide-react';
 
 const STEPS = [
     { key: 'REQUESTED',         label: 'Requested'   },
@@ -55,6 +55,7 @@ export default function BookingDetail() {
     const [actionError, setActionError] = useState(null);
     const [now, setNow] = useState(new Date());
     const [confirmCancel, setConfirmCancel] = useState(false);
+    const [showEndModal, setShowEndModal] = useState(false);
 
     useEffect(() => {
         const tick = setInterval(() => setNow(new Date()), 1000);
@@ -75,12 +76,17 @@ export default function BookingDetail() {
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
 
-    const act = async (action) => {
+    const act = async (action, data) => {
         setActionLoading(true);
         setActionError(null);
         try {
-            const fns = { confirm: confirmBooking, start: startBooking, end: endBooking, sanitize: sanitizeBooking, cancel: cancelBooking };
-            const res = await fns[action](id);
+            let res;
+            if (action === 'end') {
+                res = await endBooking(id, data || {});
+            } else {
+                const fns = { confirm: confirmBooking, start: startBooking, sanitize: sanitizeBooking, cancel: cancelBooking };
+                res = await fns[action](id);
+            }
             setBooking(res.data);
         } catch (e) {
             setActionError(e.response?.data?.message || e.message || 'Action failed');
@@ -298,7 +304,7 @@ export default function BookingDetail() {
                                     <ActionBtn color="green" label="▶ Start Surgery" onClick={() => act('start')} loading={actionLoading} />
                                 )}
                                 {booking.status === 'IN_PROGRESS' && (
-                                    <ActionBtn color="red" label="⏹ End Surgery" onClick={() => act('end')} loading={actionLoading}
+                                    <ActionBtn color="red" label="⏹ End Surgery" onClick={() => setShowEndModal(true)} loading={actionLoading}
                                         hint="This will trigger billing" />
                                 )}
                                 {booking.status === 'PENDING_SANITATION' && (
@@ -394,6 +400,115 @@ export default function BookingDetail() {
                     onSuccess={() => { setShowAdd(false); fetchAll(); }}
                 />
             )}
+
+            {showEndModal && (
+                <EndSurgeryModal
+                    hasAdmission={!!booking.admissionId}
+                    onClose={() => setShowEndModal(false)}
+                    onConfirm={(postOtRoomId) => {
+                        setShowEndModal(false);
+                        act('end', postOtRoomId ? { postOtRoomId } : {});
+                    }}
+                />
+            )}
+        </div>
+    );
+}
+
+function EndSurgeryModal({ hasAdmission, onClose, onConfirm }) {
+    const [rooms, setRooms] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedRoomId, setSelectedRoomId] = useState(null);
+
+    useEffect(() => {
+        getPostOtRooms()
+            .then(r => setRooms(Array.isArray(r.data) ? r.data : []))
+            .catch(() => setRooms([]))
+            .finally(() => setLoading(false));
+    }, []);
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <BedDouble size={18} className="text-blue-600" />
+                        <h2 className="font-bold text-gray-900">End Surgery</h2>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+                </div>
+
+                <div className="p-6">
+                    {hasAdmission ? (
+                        <>
+                            <p className="text-sm text-gray-600 mb-4">
+                                Select a post-OT recovery room for the patient, or skip to return them to their previous room.
+                            </p>
+
+                            {loading ? (
+                                <div className="flex items-center justify-center py-6">
+                                    <Activity size={18} className="animate-spin text-blue-500" />
+                                </div>
+                            ) : rooms.length === 0 ? (
+                                <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+                                    No post-OT recovery rooms available. Patient will return to previous room.
+                                </p>
+                            ) : (
+                                <div className="space-y-2 mb-4 max-h-52 overflow-y-auto">
+                                    {rooms.map(room => (
+                                        <button
+                                            key={room.id}
+                                            type="button"
+                                            onClick={() => setSelectedRoomId(selectedRoomId === room.id ? null : room.id)}
+                                            className={[
+                                                'w-full text-left px-4 py-3 rounded-xl border-2 transition text-sm',
+                                                selectedRoomId === room.id
+                                                    ? 'border-blue-500 bg-blue-50'
+                                                    : 'border-gray-200 hover:border-gray-300 bg-white',
+                                            ].join(' ')}
+                                        >
+                                            <p className="font-semibold text-gray-900">{room.roomNumber || room.roomName}</p>
+                                            {room.ward && <p className="text-xs text-gray-500 mt-0.5">{room.ward}</p>}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex gap-3">
+                                <button type="button" onClick={onClose}
+                                    className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                                    Cancel
+                                </button>
+                                <button type="button" onClick={() => onConfirm(null)}
+                                    className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition">
+                                    Skip (return to ward)
+                                </button>
+                                <button type="button" onClick={() => onConfirm(selectedRoomId)}
+                                    disabled={!selectedRoomId}
+                                    className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition">
+                                    End Surgery
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <p className="text-sm text-gray-600 mb-5">
+                                This patient was not tracked in HMS. Ending surgery will trigger billing only.
+                            </p>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={onClose}
+                                    className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                                    Cancel
+                                </button>
+                                <button type="button" onClick={() => onConfirm(null)}
+                                    className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition">
+                                    End Surgery
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

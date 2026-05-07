@@ -60,7 +60,7 @@ export const getBooking = (id) => api.get(`/api/ot/bookings/${id}`);
 export const updateBooking = (id, data) => api.put(`/api/ot/bookings/${id}`, data);
 export const confirmBooking = (id) => api.patch(`/api/ot/bookings/${id}/confirm`);
 export const startBooking = (id) => api.patch(`/api/ot/bookings/${id}/start`);
-export const endBooking = (id) => api.patch(`/api/ot/bookings/${id}/end`);
+export const endBooking = (id, data) => api.patch(`/api/ot/bookings/${id}/end`, data || {});
 export const sanitizeBooking = (id) => api.patch(`/api/ot/bookings/${id}/sanitize`);
 export const cancelBooking = (id) => api.patch(`/api/ot/bookings/${id}/cancel`);
 
@@ -87,6 +87,17 @@ export const getHmsDoctors = (search, specialization) =>
 
 export const movePatientToOT = (admissionId, data) =>
     api.patch(`/api/proxy/hms/admissions/${admissionId}/move-to-ot`, data);
+export const returnPatientFromOT = (admissionId, data) =>
+    api.patch(`/api/proxy/hms/admissions/${admissionId}/return-from-ot`, data || {});
+
+// ─── HMS Procedures & Rooms ───────────────────────────────────────────────────
+export const getHospitalServices = () => api.get('/api/proxy/hms/hospital-services');
+export const getPostOtRooms = () => api.get('/api/proxy/hms/rooms/post-ot');
+
+// ─── HMS Patient / Admission (emergency) ──────────────────────────────────────
+export const createHmsPatient = (data) => api.post('/api/proxy/hms/patients', data);
+export const createHmsAdmission = (data) => api.post('/api/proxy/hms/admissions', data);
+export const getPatientAdmissions = (patientId) => api.get(`/api/proxy/hms/admissions/patient/${patientId}`);
 
 // ─── Directory Proxy ──────────────────────────────────────────────────────────
 export const getDirectorySurgeons = (search) =>
