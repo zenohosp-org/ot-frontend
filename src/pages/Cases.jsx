@@ -836,6 +836,7 @@ function RoomGrid({ start, end, selectedRoomId, onSelect }) {
 function RoomCard({ room, selected, onSelect }) {
     const isInProgress = room.occupiedStatus === 'IN_PROGRESS';
     const isSanitation = room.occupiedStatus === 'PENDING_SANITATION';
+    const isHmsOccupied = room.occupiedStatus === 'HMS_OCCUPIED';
     const roomLabel = room.roomNumber || room.roomName || `OT-${room.id}`;
 
     const freeLabel = (() => {
@@ -863,9 +864,9 @@ function RoomCard({ room, selected, onSelect }) {
                 <p className={`text-sm font-bold truncate ${selected ? 'text-white' : 'text-gray-900'}`}>
                     {roomLabel}
                 </p>
-                {room.floor && (
+                {room.ward && (
                     <p className={`text-xs mt-0.5 ${selected ? 'text-green-100' : 'text-gray-500'}`}>
-                        {room.floor}
+                        {room.ward}
                     </p>
                 )}
                 <div className="mt-2 flex items-center gap-1.5">
@@ -883,21 +884,27 @@ function RoomCard({ room, selected, onSelect }) {
         ? 'border-red-100 bg-red-50/70'
         : isSanitation
             ? 'border-amber-100 bg-amber-50/70'
-            : 'border-blue-100 bg-blue-50/70';
+            : isHmsOccupied
+                ? 'border-slate-200 bg-slate-50/70'
+                : 'border-blue-100 bg-blue-50/70';
 
     const badgeCls = isInProgress
         ? 'bg-red-100 text-red-700'
         : isSanitation
             ? 'bg-amber-100 text-amber-700'
-            : 'bg-blue-100 text-blue-700';
+            : isHmsOccupied
+                ? 'bg-slate-100 text-slate-600'
+                : 'bg-blue-100 text-blue-700';
 
     const dotCls = isInProgress
         ? 'bg-red-500 animate-pulse'
         : isSanitation
             ? 'bg-amber-500'
-            : 'bg-blue-500';
+            : isHmsOccupied
+                ? 'bg-slate-400'
+                : 'bg-blue-500';
 
-    const statusLabel = isInProgress ? 'In Progress' : isSanitation ? 'Cleaning' : 'Booked';
+    const statusLabel = isInProgress ? 'In Progress' : isSanitation ? 'Cleaning' : isHmsOccupied ? 'In Use' : 'Booked';
 
     return (
         <div className={`rounded-xl border-2 p-3 cursor-not-allowed select-none ${cardCls}`}>
