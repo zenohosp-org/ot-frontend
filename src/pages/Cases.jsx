@@ -4,6 +4,7 @@ import {
     getBookings, createBooking, addConsumptionItem,
     getHmsPatients, getHmsDoctors,
     getInventoryKits, getActiveAdmissions, getAvailableRooms,
+    getHospitalServices,
 } from '../api/client';
 import {
     Plus, Search, Trash2, AlertCircle, CheckCircle2, XCircle,
@@ -188,6 +189,7 @@ export default function Cases() {
             {showDrawer && (
                 <CreateBookingDrawer
                     prefilled={prefilledPatient}
+                    admissions={admissions}
                     onClose={() => { setShowDrawer(false); setPrefilledPatient(null); }}
                     onSuccess={() => {
                         setShowDrawer(false);
@@ -278,7 +280,7 @@ function BookingRow({ booking, onClick }) {
 
 const MAX_RETRIES = 3;
 
-function CreateBookingDrawer({ onClose, onSuccess, prefilled = null }) {
+function CreateBookingDrawer({ onClose, onSuccess, prefilled = null, admissions = [] }) {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
 
@@ -300,6 +302,11 @@ function CreateBookingDrawer({ onClose, onSuccess, prefilled = null }) {
     const [kitError, setKitError] = useState(null);
     const [selectedKits, setSelectedKits] = useState([]);
 
+    const [services, setServices] = useState([]);
+    const [serviceSearch, setServiceSearch] = useState('');
+    const [showServiceDrop, setShowServiceDrop] = useState(false);
+    const [loadingServices, setLoadingServices] = useState(false);
+
     const kitRetry = useRef(null);
 
     const [form, setForm] = useState({
@@ -308,6 +315,7 @@ function CreateBookingDrawer({ onClose, onSuccess, prefilled = null }) {
         patientMrn: prefilled?.patientMrn ?? '',
         procedureName: '',
         procedureCharge: '',
+        hmsServiceId: '',
         roomId: '',
         roomName: '',
         surgeonId: '',
@@ -337,6 +345,14 @@ function CreateBookingDrawer({ onClose, onSuccess, prefilled = null }) {
         };
         fetchKits();
         return () => clearTimeout(kitRetry.current);
+    }, []);
+
+    useEffect(() => {
+        setLoadingServices(true);
+        getHospitalServices()
+            .then(res => setServices(Array.isArray(res.data) ? res.data.filter(s => s.isActive !== false) : []))
+            .catch(() => setServices([]))
+            .finally(() => setLoadingServices(false));
     }, []);
 
     useEffect(() => {
@@ -386,6 +402,17 @@ function CreateBookingDrawer({ onClose, onSuccess, prefilled = null }) {
         setForm(f => ({ ...f, roomId: room.id || 0, roomName: room.roomNumber || '' }));
     };
 
+    const handleServiceSelect = (svc) => {
+        setForm(f => ({
+            ...f,
+            procedureName: svc.name,
+            procedureCharge: svc.price != null ? String(svc.price) : '',
+            hmsServiceId: svc.id,
+        }));
+        setServiceSearch('');
+        setShowServiceDrop(false);
+    };
+
     const handleAddKit = (kit) => {
         if (selectedKits.find(k => k.id === kit.id)) return;
         setSelectedKits(prev => [...prev, { id: kit.id, name: kit.name, quantity: 1, unitPrice: kit.price || 0 }]);
@@ -406,6 +433,7 @@ function CreateBookingDrawer({ onClose, onSuccess, prefilled = null }) {
                 patientId: Number(form.patientId),
                 roomId: Number(form.roomId) || 0,
                 procedureCharge: form.procedureCharge ? Number(form.procedureCharge) : null,
+                hmsServiceId: form.hmsServiceId || null,
             };
             const res = await createBooking(payload);
             const bookingId = res.data.id;
@@ -472,16 +500,28 @@ function CreateBookingDrawer({ onClose, onSuccess, prefilled = null }) {
                             />
                             {showPatientDrop && patients.length > 0 && (
                                 <Dropdown>
-                                    {patients.map(p => (
-                                        <DropdownItem key={p.id} onClick={() => handlePatientSelect(p)}>
-                                            <span className="font-medium text-gray-900">
-                                                {p.name || `${p.firstName} ${p.lastName}`}
-                                            </span>
-                                            <span className="text-xs text-gray-500">
-                                                MRN: {p.mrn}{p.age != null ? ` · Age: ${p.age}` : ''}
-                                            </span>
-                                        </DropdownItem>
-                                    ))}
+                                    {patients.map(p => {
+                                        const isInpatient = admissions.some(
+                                            a => String(a.patientId) === String(p.id)
+                                        );
+                                        return (
+                                            <DropdownItem key={p.id} onClick={() => handlePatientSelect(p)}>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-gray-900">
+                                                        {p.name || `${p.firstName} ${p.lastName}`}
+                                                    </span>
+                                                    {isInpatient && (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+                                                            Inpatient
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="text-xs text-gray-500">
+                                                    MRN: {p.mrn}{p.age != null ? ` · Age: ${p.age}` : ''}
+                                                </span>
+                                            </DropdownItem>
+                                        );
+                                    })}
                                 </Dropdown>
                             )}
                         </div>
@@ -496,21 +536,59 @@ function CreateBookingDrawer({ onClose, onSuccess, prefilled = null }) {
 
                     {/* ── Procedure ───────────────────────────────────────── */}
                     <DrawerSection title="Procedure" required>
-                        <div className="grid grid-cols-2 gap-3">
-                            <input
-                                className="col-span-2 border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Procedure name *"
-                                value={form.procedureName}
-                                onChange={e => setForm(f => ({ ...f, procedureName: e.target.value.slice(0, 300) }))}
-                                required
-                            />
-                            <input
-                                className="col-span-2 border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                type="number" step="0.01" min="0"
-                                placeholder="Procedure charge (₹)"
-                                value={form.procedureCharge}
-                                onChange={e => setForm(f => ({ ...f, procedureCharge: e.target.value }))}
-                            />
+                        <div className="space-y-2.5">
+                            <div className="relative">
+                                <SearchField
+                                    placeholder={loadingServices ? 'Loading services…' : 'Search by procedure name…'}
+                                    value={serviceSearch}
+                                    onChange={v => { setServiceSearch(v); setShowServiceDrop(true); }}
+                                    onFocus={() => setShowServiceDrop(true)}
+                                    loading={loadingServices}
+                                />
+                                {showServiceDrop && services.length > 0 && (() => {
+                                    const q = serviceSearch.toLowerCase();
+                                    const filtered = services.filter(s =>
+                                        !q || s.name?.toLowerCase().includes(q)
+                                    );
+                                    return filtered.length > 0 ? (
+                                        <Dropdown>
+                                            {filtered.map(svc => (
+                                                <DropdownItem key={svc.id} onClick={() => handleServiceSelect(svc)}>
+                                                    <span className="font-medium text-gray-900">{svc.name}</span>
+                                                    {svc.price != null && (
+                                                        <span className="text-xs text-green-600 font-semibold">
+                                                            ₹{Number(svc.price).toLocaleString('en-IN')}
+                                                        </span>
+                                                    )}
+                                                </DropdownItem>
+                                            ))}
+                                        </Dropdown>
+                                    ) : null;
+                                })()}
+                            </div>
+                            {form.procedureName ? (
+                                <SelectedTag
+                                    label={form.procedureName}
+                                    sub={form.procedureCharge ? `₹${Number(form.procedureCharge).toLocaleString('en-IN')}` : 'No charge set'}
+                                    onClear={() => setForm(f => ({ ...f, procedureName: '', procedureCharge: '', hmsServiceId: '' }))}
+                                />
+                            ) : (
+                                <input
+                                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="Or type procedure name manually…"
+                                    value={form.procedureName}
+                                    onChange={e => setForm(f => ({ ...f, procedureName: e.target.value.slice(0, 300), hmsServiceId: '' }))}
+                                />
+                            )}
+                            {form.procedureName && !form.hmsServiceId && (
+                                <input
+                                    className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    type="number" step="0.01" min="0"
+                                    placeholder="Procedure charge (₹)"
+                                    value={form.procedureCharge}
+                                    onChange={e => setForm(f => ({ ...f, procedureCharge: e.target.value }))}
+                                />
+                            )}
                         </div>
                     </DrawerSection>
 
