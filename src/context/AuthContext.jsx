@@ -11,14 +11,14 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         if (import.meta.env.VITE_DEV_MOCK_AUTH === 'true') {
-            const hospitalId = import.meta.env.VITE_MOCK_HOSPITAL_ID || 'e1b924ba-3cac-426d-a775-3c978fd95490';
-            // Obtain a real JWT cookie from the local backend so API calls work
-            api.post(`/api/auth/dev-login?hospitalId=${hospitalId}`)
-                .catch(() => {})
-                .finally(() => {
-                    setUser({ hospitalId, modules: ['ot'] });
-                    setLoading(false);
-                });
+            setUser({
+                userId: import.meta.env.VITE_MOCK_USER_ID || '1',
+                email: import.meta.env.VITE_MOCK_USER_EMAIL || 'dev@zenohosp.com',
+                role: import.meta.env.VITE_MOCK_USER_ROLE || 'super_admin',
+                hospitalId: import.meta.env.VITE_MOCK_HOSPITAL_ID || 'e1b924ba-3cac-426d-a775-3c978fd95490',
+                modules: ['ot'],
+            });
+            setLoading(false);
             return;
         }
 

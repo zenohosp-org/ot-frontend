@@ -8,6 +8,13 @@ const api = axios.create({
     timeout: 8000,
 });
 
+if (import.meta.env.VITE_DEV_MOCK_AUTH === 'true' && import.meta.env.VITE_MOCK_JWT) {
+    api.interceptors.request.use((config) => {
+        config.headers.Authorization = `Bearer ${import.meta.env.VITE_MOCK_JWT}`;
+        return config;
+    });
+}
+
 let redirectLockKey = null;
 
 const MAX_RETRIES = 3;
